@@ -7,8 +7,10 @@ import (
 )
 
 type BFFConfig struct {
-	JWTSecret    []byte
-	AuthGRPCAddr string
+	JWTSecret        []byte
+	AuthGRPCAddr     string
+	CatalogGRPCAddr  string
+	ActivityGRPCAddr string
 }
 
 func LoadBFF() (BFFConfig, error) {
@@ -20,5 +22,13 @@ func LoadBFF() (BFFConfig, error) {
 	if authAddr == "" {
 		return BFFConfig{}, errors.New("AUTH_GRPC_ADDR is required")
 	}
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr}, nil
+	catalogAddr := strings.TrimSpace(os.Getenv("CATALOG_GRPC_ADDR"))
+	if catalogAddr == "" {
+		return BFFConfig{}, errors.New("CATALOG_GRPC_ADDR is required")
+	}
+	activityAddr := strings.TrimSpace(os.Getenv("ACTIVITY_GRPC_ADDR"))
+	if activityAddr == "" {
+		return BFFConfig{}, errors.New("ACTIVITY_GRPC_ADDR is required")
+	}
+	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr}, nil
 }

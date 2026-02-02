@@ -2,46 +2,77 @@ package main
 
 import (
 	"context"
-	"net/http"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
-	"github.com/example/anime-platform/internal/platform/config"
-	"github.com/example/anime-platform/internal/platform/httpserver"
+	activityv1 "github.com/example/anime-platform/gen/activity/v1"
+	"github.com/example/anime-platform/internal/platform/db"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
+	grpcconfig "github.com/example/anime-platform/services/activity/internal/config"
+	grpcapi "github.com/example/anime-platform/services/activity/internal/grpc"
 )
 
 func main() {
-	cfg, err := config.Load()
-	if err != nil {
-		panic(err)
+	cfgService := os.Getenv("SERVICE_NAME")
+	logLevel := os.Getenv("LOG_LEVEL")
+	if cfgService == "" {
+		cfgService = "activity"
 	}
-	log, err := logging.New(cfg.LogLevel)
+	log, err := logging.New(logLevel)
 	if err != nil {
 		panic(err)
 	}
 	defer func() { _ = log.Sync() }()
+	_ = cfgService
 
-	r := chi.NewRouter()
-	httpserver.SetupRouter(r)
-	r.Get("/v1/continue", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("[]"))
-	})
+	pool, err := db.Open(context.Background())
+	if err != nil {
+		log.Error("db open", zap.Error(err))
+		run.Exit(1)
+	}
+	defer pool.Close()
 
-	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
+	grpcCfg := grpcconfig.LoadGRPC()
+	lis, err := net.Listen("tcp", grpcCfg.Addr)
+	if err != nil {
+		log.Error("listen", zap.Error(err))
+		run.Exit(1)
+	}
 
-	runner := run.New(log)
-	code := runner.WithSignals(func(ctx context.Context) error {
+	grpcSrv := grpc.NewServer()
+	activityv1.RegisterActivityServiceServer(grpcSrv, &grpcapi.ActivityService{DB: pool})
+	reflection.Register(grpcSrv)
+
+	log.Info("grpc server starting", zap.String("addr", grpcCfg.Addr))
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stopped := make(chan struct{})
 		go func() {
-			<-ctx.Done()
-			_ = srv.Shutdown(context.Background())
+			grpcSrv.GracefulStop()
+			close(stopped)
 		}()
-		return srv.Start(log)
-	})
+		select {
+		case <-stopped:
+		case <-time.After(10 * time.Second):
+			grpcSrv.Stop()
+		}
+	}()
 
-	log.Info("exit", zap.Int("code", code))
-	run.Exit(code)
+	if err := grpcSrv.Serve(lis); err != nil {
+		log.Error("grpc serve", zap.Error(err))
+		run.Exit(1)
+	}
+
+	run.Exit(0)
 }

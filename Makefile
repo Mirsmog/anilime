@@ -14,6 +14,10 @@ help:
 	@printf "  make hooks       - enable git hooks (pre-commit fmt+lint)\n"
 	@printf "  make migrate-auth-up   - apply auth DB migrations\n"
 	@printf "  make migrate-auth-down - rollback auth DB migrations (1 step)\n"
+	@printf "  make migrate-catalog-up   - apply catalog DB migrations\n"
+	@printf "  make migrate-catalog-down - rollback catalog DB migrations (1 step)\n"
+	@printf "  make migrate-activity-up   - apply activity DB migrations\n"
+	@printf "  make migrate-activity-down - rollback activity DB migrations (1 step)\n"
 	@printf "  make proto       - lint + generate protobuf\n"
 	@printf "  make up          - docker compose up --build\n"
 	@printf "  make down        - docker compose down -v\n"
@@ -88,6 +92,30 @@ migrate-auth-down:
 	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
 	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
 	$(MIGRATE) -database "$(DATABASE_URL)" -path services/auth/migrations down 1
+
+.PHONY: migrate-catalog-up
+migrate-catalog-up:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/catalog/migrations up
+
+.PHONY: migrate-catalog-down
+migrate-catalog-down:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/catalog/migrations down 1
+
+.PHONY: migrate-activity-up
+migrate-activity-up:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/activity/migrations up
+
+.PHONY: migrate-activity-down
+migrate-activity-down:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/activity/migrations down 1
 
 .PHONY: proto
 proto:

@@ -46,6 +46,20 @@ func main() {
 	}
 	defer authc.Conn.Close()
 
+	catalogc, err := grpcclient.NewCatalogClient(bffCfg.CatalogGRPCAddr)
+	if err != nil {
+		log.Error("init catalog grpc client", zap.Error(err))
+		run.Exit(1)
+	}
+	defer catalogc.Conn.Close()
+
+	activityc, err := grpcclient.NewActivityClient(bffCfg.ActivityGRPCAddr)
+	if err != nil {
+		log.Error("init activity grpc client", zap.Error(err))
+		run.Exit(1)
+	}
+	defer activityc.Conn.Close()
+
 	// Example route: in real BFF you aggregate from other services.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -60,10 +74,14 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))
+
 		r.Get("/v1/me", func(w http.ResponseWriter, r *http.Request) {
 			uid, _ := auth.UserIDFromContext(r.Context())
 			api.WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid})
 		})
+
+		r.Post("/v1/activity/progress", bffhandlers.UpsertProgress(activityc.Client))
+		r.Get("/v1/activity/continue", bffhandlers.ContinueWatching(activityc.Client, catalogc.Client))
 	})
 
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})

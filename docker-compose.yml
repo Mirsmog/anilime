@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
+    volumes:
+      - ./deployments/postgres/init-multiple-dbs.sql:/docker-entrypoint-initdb.d/01-init-multiple-dbs.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -43,6 +45,8 @@ services:
       LOG_LEVEL: debug
       JWT_SECRET: dev-secret-change-me
       AUTH_GRPC_ADDR: auth:9091
+      CATALOG_GRPC_ADDR: catalog:9092
+      ACTIVITY_GRPC_ADDR: activity:9093
     ports:
       - "8080:8080"
     depends_on:
@@ -60,7 +64,7 @@ services:
     environment:
       SERVICE_NAME: auth
       LOG_LEVEL: debug
-      DATABASE_URL: postgres://app:app@postgres:5432/app?sslmode=disable
+      DATABASE_URL: postgres://app:app@postgres:5432/auth?sslmode=disable
       JWT_SECRET: dev-secret-change-me
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 720h
@@ -77,10 +81,11 @@ services:
       dockerfile: services/catalog/Dockerfile
     environment:
       SERVICE_NAME: catalog
-      HTTP_ADDR: :8082
       LOG_LEVEL: debug
+      DATABASE_URL: postgres://app:app@postgres:5432/catalog?sslmode=disable
+      GRPC_ADDR: :9092
     ports:
-      - "8082:8082"
+      - "9092:9092"
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,10 +126,11 @@ services:
       dockerfile: services/activity/Dockerfile
     environment:
       SERVICE_NAME: activity
-      HTTP_ADDR: :8085
       LOG_LEVEL: debug
+      DATABASE_URL: postgres://app:app@postgres:5432/activity?sslmode=disable
+      GRPC_ADDR: :9093
     ports:
-      - "8085:8085"
+      - "9093:9093"
     depends_on:
       postgres:
         condition: service_healthy
