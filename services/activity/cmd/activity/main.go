@@ -25,6 +25,7 @@ func main() {
 	defer func() { _ = log.Sync() }()
 
 	r := chi.NewRouter()
+	httpserver.SetupRouter(r)
 	r.Get("/v1/continue", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("[]"))

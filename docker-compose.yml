@@ -41,6 +41,8 @@ services:
       SERVICE_NAME: bff
       HTTP_ADDR: :8080
       LOG_LEVEL: debug
+      JWT_SECRET: dev-secret-change-me
+      AUTH_GRPC_ADDR: auth:9091
     ports:
       - "8080:8080"
     depends_on:
@@ -57,10 +59,14 @@ services:
       dockerfile: services/auth/Dockerfile
     environment:
       SERVICE_NAME: auth
-      HTTP_ADDR: :8081
       LOG_LEVEL: debug
+      DATABASE_URL: postgres://app:app@postgres:5432/app?sslmode=disable
+      JWT_SECRET: dev-secret-change-me
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 720h
+      GRPC_ADDR: :9091
     ports:
-      - "8081:8081"
+      - "9091:9091"
     depends_on:
       postgres:
         condition: service_healthy

@@ -2,15 +2,26 @@ package main
 
 import (
 	"context"
-	"net/http"
+	"net"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+
+	authv1 "github.com/example/anime-platform/gen/auth/v1"
 
 	"github.com/example/anime-platform/internal/platform/config"
-	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
+	"github.com/example/anime-platform/services/auth/internal/app"
+	authconfig "github.com/example/anime-platform/services/auth/internal/config"
+	grpcconfig "github.com/example/anime-platform/services/auth/internal/config"
+	grpcapi "github.com/example/anime-platform/services/auth/internal/grpc"
+	"github.com/example/anime-platform/services/auth/internal/store"
+	"github.com/example/anime-platform/services/auth/internal/tokens"
 )
 
 func main() {
@@ -24,23 +35,60 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
-	r := chi.NewRouter()
-	r.Get("/v1/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("pong"))
+	// Init dependencies
+	a, err := app.New(context.Background(), log)
+	if err != nil {
+		log.Error("init app", zap.Error(err))
+		run.Exit(1)
+	}
+	defer a.Close()
+
+	authCfg, err := authconfig.LoadAuth()
+	if err != nil {
+		log.Error("load auth config", zap.Error(err))
+		run.Exit(1)
+	}
+
+	grpcCfg := grpcconfig.LoadGRPC()
+
+	lis, err := net.Listen("tcp", grpcCfg.Addr)
+	if err != nil {
+		log.Error("listen", zap.Error(err))
+		run.Exit(1)
+	}
+
+	grpcSrv := grpc.NewServer()
+	authv1.RegisterAuthServiceServer(grpcSrv, &grpcapi.AuthService{
+		Store:  store.Store{DB: a.DB},
+		Tokens: tokens.Service{Secret: authCfg.JWTSecret, AccessTokenTTL: authCfg.AccessTokenTTL, RefreshTokenTTL: authCfg.RefreshTokenTTL},
+		Cfg:    authCfg,
 	})
+	reflection.Register(grpcSrv)
 
-	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
+	log.Info("grpc server starting", zap.String("addr", grpcCfg.Addr))
 
-	runner := run.New(log)
-	code := runner.WithSignals(func(ctx context.Context) error {
+	// graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+		stopped := make(chan struct{})
 		go func() {
-			<-ctx.Done()
-			_ = srv.Shutdown(context.Background())
+			grpcSrv.GracefulStop()
+			close(stopped)
 		}()
-		return srv.Start(log)
-	})
+		select {
+		case <-stopped:
+		case <-time.After(10 * time.Second):
+			grpcSrv.Stop()
+		}
+	}()
 
-	log.Info("exit", zap.Int("code", code))
-	run.Exit(code)
+	if err := grpcSrv.Serve(lis); err != nil {
+		log.Error("grpc serve", zap.Error(err))
+		run.Exit(1)
+	}
+
+	run.Exit(0)
 }

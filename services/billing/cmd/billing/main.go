@@ -25,6 +25,7 @@ func main() {
 	defer func() { _ = log.Sync() }()
 
 	r := chi.NewRouter()
+	httpserver.SetupRouter(r)
 	r.Post("/v1/stripe/webhook", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: verify Stripe signature, handle events idempotently
 		w.WriteHeader(http.StatusNoContent)

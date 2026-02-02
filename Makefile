@@ -12,6 +12,9 @@ help:
 	@printf "  make test        - run tests\n"
 	@printf "  make build       - build all service binaries into ./bin\n"
 	@printf "  make hooks       - enable git hooks (pre-commit fmt+lint)\n"
+	@printf "  make migrate-auth-up   - apply auth DB migrations\n"
+	@printf "  make migrate-auth-down - rollback auth DB migrations (1 step)\n"
+	@printf "  make proto       - lint + generate protobuf\n"
 	@printf "  make up          - docker compose up --build\n"
 	@printf "  make down        - docker compose down -v\n"
 
@@ -27,12 +30,23 @@ test:
 GOBIN ?= $(shell go env GOPATH)/bin
 GOIMPORTS := $(GOBIN)/goimports
 GOLANGCI_LINT := $(GOBIN)/golangci-lint
+MIGRATE := $(GOBIN)/migrate
+BUF := $(GOBIN)/buf
+PROTOC_GEN_GO := $(GOBIN)/protoc-gen-go
+PROTOC_GEN_GO_GRPC := $(GOBIN)/protoc-gen-go-grpc
 
 tools:
 	@echo "==> installing goimports to $(GOIMPORTS)"
 	go install golang.org/x/tools/cmd/goimports@latest
 	@echo "==> installing golangci-lint to $(GOLANGCI_LINT)"
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "==> installing migrate (postgres driver) to $(MIGRATE)"
+	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	@echo "==> installing buf to $(BUF)"
+	go install github.com/bufbuild/buf/cmd/buf@latest
+	@echo "==> installing protoc plugins"
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 .PHONY: fmt
 fmt:
@@ -62,6 +76,24 @@ hooks:
 	else \
 		echo "Not a git repository. Run: git init && make hooks"; \
 	fi
+
+.PHONY: migrate-auth-up
+migrate-auth-up:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/auth/migrations up
+
+.PHONY: migrate-auth-down
+migrate-auth-down:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/auth/migrations down 1
+
+.PHONY: proto
+proto:
+	@if [ ! -x "$(BUF)" ]; then echo "buf not installed: make tools"; exit 1; fi
+	$(BUF) lint
+	$(BUF) generate
 
 .PHONY: build
 build:
