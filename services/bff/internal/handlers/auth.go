@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -152,20 +153,41 @@ func writeGRPCError(w http.ResponseWriter, requestID string, err error) {
 		return
 	}
 
-	// Minimal mapping (can be improved to our code/message mapping table)
+	code := "INTERNAL"
+	details := map[string]any{}
+
+	// Try to extract structured details
+	for _, d := range st.Details() {
+		switch v := d.(type) {
+		case *errdetails.ErrorInfo:
+			if v.GetReason() != "" {
+				code = v.GetReason()
+			}
+		case *errdetails.BadRequest:
+			for _, fv := range v.GetFieldViolations() {
+				if fv.GetField() != "" {
+					details[fv.GetField()] = fv.GetDescription()
+				}
+			}
+		}
+	}
+	if len(details) == 0 {
+		details = nil
+	}
+
 	switch st.Code() {
 	case codes.InvalidArgument:
-		api.BadRequest(w, "INVALID_ARGUMENT", st.Message(), requestID, nil)
+		api.BadRequest(w, code, st.Message(), requestID, details)
 	case codes.Unauthenticated:
-		api.Unauthorized(w, "UNAUTHENTICATED", st.Message(), requestID)
+		api.Unauthorized(w, code, st.Message(), requestID)
 	case codes.PermissionDenied:
-		api.Forbidden(w, "FORBIDDEN", st.Message(), requestID)
+		api.Forbidden(w, code, st.Message(), requestID)
 	case codes.NotFound:
-		api.NotFound(w, "NOT_FOUND", st.Message(), requestID)
+		api.NotFound(w, code, st.Message(), requestID)
 	case codes.AlreadyExists:
-		api.Conflict(w, "CONFLICT", st.Message(), requestID, nil)
+		api.Conflict(w, code, st.Message(), requestID, details)
 	case codes.ResourceExhausted:
-		api.RateLimited(w, "RATE_LIMITED", st.Message(), requestID, nil)
+		api.RateLimited(w, code, st.Message(), requestID, details)
 	default:
 		api.Internal(w, requestID)
 	}

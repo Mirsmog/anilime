@@ -12,9 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 
 	authv1 "github.com/example/anime-platform/gen/auth/v1"
 	"github.com/example/anime-platform/services/auth/internal/config"
@@ -36,31 +34,31 @@ func (s *AuthService) Register(ctx context.Context, req *authv1.RegisterRequest)
 	password := req.GetPassword()
 
 	if !isValidEmail(email) {
-		return nil, status.Error(codes.InvalidArgument, "invalid email")
+		return nil, errInvalidArgument("VALIDATION_EMAIL", "Invalid email", map[string]string{"email": "invalid"})
 	}
 	if !isValidUsername(username) {
-		return nil, status.Error(codes.InvalidArgument, "invalid username")
+		return nil, errInvalidArgument("VALIDATION_USERNAME", "Invalid username", map[string]string{"username": "invalid"})
 	}
 	if len(password) < 8 {
-		return nil, status.Error(codes.InvalidArgument, "password too short")
+		return nil, errInvalidArgument("VALIDATION_PASSWORD", "Password too short", map[string]string{"password": "min length 8"})
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "hash password")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
 	u, err := s.Store.CreateUser(ctx, store.CreateUserParams{Email: email, Username: username, PasswordHash: string(hash)})
 	if err != nil {
 		if errors.Is(err, store.ErrConflict) {
-			return nil, status.Error(codes.AlreadyExists, "user exists")
+			return nil, errAlreadyExists("USER_ALREADY_EXISTS", "User already exists")
 		}
-		return nil, status.Error(codes.Internal, "create user")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
 	resp, err := s.issueTokens(ctx, u, clientIPFromMD(ctx), userAgentFromMD(ctx))
 	if err != nil {
-		return nil, status.Error(codes.Internal, "issue tokens")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 	return resp, nil
 }
@@ -68,23 +66,23 @@ func (s *AuthService) Register(ctx context.Context, req *authv1.RegisterRequest)
 func (s *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
 	login := strings.TrimSpace(req.GetLogin())
 	if login == "" {
-		return nil, status.Error(codes.InvalidArgument, "login required")
+		return nil, errInvalidArgument("VALIDATION_LOGIN", "Login is required", map[string]string{"login": "required"})
 	}
 	if req.GetPassword() == "" {
-		return nil, status.Error(codes.InvalidArgument, "password required")
+		return nil, errInvalidArgument("VALIDATION_PASSWORD", "Password is required", map[string]string{"password": "required"})
 	}
 
 	row, err := s.Store.FindUserByLogin(ctx, login)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
+		return nil, errUnauthenticated("AUTH_INVALID_CREDENTIALS", "Invalid credentials")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(req.GetPassword())) != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
+		return nil, errUnauthenticated("AUTH_INVALID_CREDENTIALS", "Invalid credentials")
 	}
 
 	resp, err := s.issueTokens(ctx, row.User, clientIPFromMD(ctx), userAgentFromMD(ctx))
 	if err != nil {
-		return nil, status.Error(codes.Internal, "issue tokens")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
 	return &authv1.LoginResponse{User: resp.User, AccessToken: resp.AccessToken, RefreshToken: resp.RefreshToken, ExpiresIn: resp.ExpiresIn}, nil
@@ -93,34 +91,34 @@ func (s *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*aut
 func (s *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*authv1.RefreshResponse, error) {
 	raw := strings.TrimSpace(req.GetRefreshToken())
 	if raw == "" {
-		return nil, status.Error(codes.InvalidArgument, "refresh_token required")
+		return nil, errInvalidArgument("VALIDATION_REFRESH_TOKEN", "refresh_token is required", map[string]string{"refresh_token": "required"})
 	}
 
 	sess, err := s.Store.GetRefreshSessionByHash(ctx, sha256Hex(raw))
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid refresh")
+		return nil, errUnauthenticated("AUTH_INVALID_REFRESH", "Invalid refresh token")
 	}
 	now := time.Now().UTC()
 	if sess.RevokedAt != nil || now.After(sess.ExpiresAt) {
-		return nil, status.Error(codes.Unauthenticated, "invalid refresh")
+		return nil, errUnauthenticated("AUTH_INVALID_REFRESH", "Invalid refresh token")
 	}
 
 	u, err := s.Store.GetUserByID(ctx, sess.UserID.String())
 	if err != nil {
-		return nil, status.Error(codes.Internal, "load user")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
 	access, exp, err := s.Tokens.NewAccessToken(sess.UserID.String(), now)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "issue access")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 	newRaw, newHash, err := tokens.NewRefreshToken()
 	if err != nil {
-		return nil, status.Error(codes.Internal, "issue refresh")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 	newID := uuid.New()
 	if err := s.Store.ReplaceRefreshSession(ctx, sess.ID, newID, now); err != nil {
-		return nil, status.Error(codes.Internal, "revoke old")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 	if err := s.Store.CreateRefreshSession(ctx, store.CreateRefreshSessionParams{
 		SessionID: newID,
@@ -131,7 +129,7 @@ func (s *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (
 		IP:        clientIPFromMD(ctx),
 		Now:       now,
 	}); err != nil {
-		return nil, status.Error(codes.Internal, "create session")
+		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
 	return &authv1.RefreshResponse{
@@ -145,7 +143,7 @@ func (s *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (
 func (s *AuthService) Logout(ctx context.Context, req *authv1.LogoutRequest) (*authv1.LogoutResponse, error) {
 	raw := strings.TrimSpace(req.GetRefreshToken())
 	if raw == "" {
-		return nil, status.Error(codes.InvalidArgument, "refresh_token required")
+		return nil, errInvalidArgument("VALIDATION_REFRESH_TOKEN", "refresh_token is required", map[string]string{"refresh_token": "required"})
 	}
 	sess, err := s.Store.GetRefreshSessionByHash(ctx, sha256Hex(raw))
 	if err == nil {
@@ -163,18 +161,18 @@ func (s *AuthService) Me(ctx context.Context, _ *authv1.MeRequest) (*authv1.MeRe
 	}
 	authz = strings.TrimSpace(authz)
 	if authz == "" {
-		return nil, status.Error(codes.Unauthenticated, "missing bearer")
+		return nil, errUnauthenticated("AUTH_MISSING", "Missing bearer token")
 	}
 	parts := strings.SplitN(authz, " ", 2)
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return nil, status.Error(codes.Unauthenticated, "invalid bearer")
+		return nil, errUnauthenticated("AUTH_INVALID", "Invalid bearer token")
 	}
 	claims, err := s.Tokens.ParseAccessToken(strings.TrimSpace(parts[1]))
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid token")
+		return nil, errUnauthenticated("AUTH_INVALID", "Invalid token")
 	}
 	if strings.TrimSpace(claims.Subject) == "" {
-		return nil, status.Error(codes.Unauthenticated, "invalid token")
+		return nil, errUnauthenticated("AUTH_INVALID", "Invalid token")
 	}
 	return &authv1.MeResponse{UserId: claims.Subject}, nil
 }
