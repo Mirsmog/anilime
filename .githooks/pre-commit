@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run from repo root regardless of where git was invoked
+if ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null); then
+  cd "$ROOT_DIR"
+else
+  # Fallback (e.g., when executed outside a git work tree)
+  ROOT_DIR=$(pwd)
+fi
+
+echo "[pre-commit] running fmt"
+make fmt
+
+echo "[pre-commit] running lint"
+make lint
+
+echo "[pre-commit] OK"

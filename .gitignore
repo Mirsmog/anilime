@@ -1,0 +1,13 @@
+.idea/
+.vscode/
+.DS_Store
+
+bin/
+**/*.log
+
+.env
+.env.*
+
+# Go
+*.test
+*.out
