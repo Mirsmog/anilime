@@ -1,0 +1,3 @@
+ALTER TABLE anime DROP COLUMN IF EXISTS score;
+ALTER TABLE anime DROP COLUMN IF EXISTS title_japanese;
+ALTER TABLE anime DROP COLUMN IF EXISTS title_english;

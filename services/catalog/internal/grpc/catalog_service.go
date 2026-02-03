@@ -2,8 +2,14 @@ package grpcapi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,6 +21,8 @@ type CatalogService struct {
 	catalogv1.UnimplementedCatalogServiceServer
 	DB *pgxpool.Pool
 }
+
+const qSelectAnimeIDByExternal = `SELECT anime_id FROM external_anime_ids WHERE provider=$1 AND provider_anime_id=$2`
 
 func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.GetEpisodesByIDsRequest) (*catalogv1.GetEpisodesByIDsResponse, error) {
 	ids := req.GetEpisodeIds()
@@ -51,4 +59,347 @@ WHERE id::text = ANY($1)
 		resp.Episodes = append(resp.Episodes, pb)
 	}
 	return resp, nil
+}
+
+func (s *CatalogService) AttachExternalAnimeID(ctx context.Context, req *catalogv1.AttachExternalAnimeIDRequest) (*catalogv1.AttachExternalAnimeIDResponse, error) {
+	animeID, err := uuid.Parse(strings.TrimSpace(req.GetAnimeId()))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid anime_id")
+	}
+	provider := strings.TrimSpace(req.GetProvider())
+	externalID := strings.TrimSpace(req.GetExternalId())
+	if provider == "" || externalID == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider and external_id are required")
+	}
+
+	q := `
+INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id)
+VALUES ($1,$2,$3)
+ON CONFLICT (provider, provider_anime_id)
+DO UPDATE SET anime_id = EXCLUDED.anime_id;
+`
+	if _, err := s.DB.Exec(ctx, q, provider, externalID, animeID); err != nil {
+		return nil, status.Error(codes.Internal, "db")
+	}
+	return &catalogv1.AttachExternalAnimeIDResponse{}, nil
+}
+
+func (s *CatalogService) ResolveAnimeIDByExternalID(ctx context.Context, req *catalogv1.ResolveAnimeIDByExternalIDRequest) (*catalogv1.ResolveAnimeIDByExternalIDResponse, error) {
+	provider := strings.TrimSpace(req.GetProvider())
+	externalID := strings.TrimSpace(req.GetExternalId())
+	if provider == "" || externalID == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider and external_id are required")
+	}
+
+	var animeID uuid.UUID
+	q := qSelectAnimeIDByExternal
+	if err := s.DB.QueryRow(ctx, q, provider, externalID).Scan(&animeID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.NotFound, "not found")
+		}
+		return nil, status.Error(codes.Internal, "db")
+	}
+	return &catalogv1.ResolveAnimeIDByExternalIDResponse{AnimeId: animeID.String()}, nil
+}
+
+func (s *CatalogService) UpsertHiAnimeEpisodes(ctx context.Context, req *catalogv1.UpsertHiAnimeEpisodesRequest) (*catalogv1.UpsertHiAnimeEpisodesResponse, error) {
+	const provider = "hianime"
+	animeID, err := uuid.Parse(strings.TrimSpace(req.GetAnimeId()))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid anime_id")
+	}
+	slug := strings.TrimSpace(req.GetHianimeSlug())
+	if slug == "" {
+		return nil, status.Error(codes.InvalidArgument, "hianime_slug is required")
+	}
+
+	now := time.Now().UTC()
+
+	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db begin")
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Ensure hianime slug mapping
+	qMapAnime := `
+INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id)
+VALUES ($1,$2,$3)
+ON CONFLICT (provider, provider_anime_id)
+DO UPDATE SET anime_id = EXCLUDED.anime_id;
+`
+	if _, err := tx.Exec(ctx, qMapAnime, provider, slug, animeID); err != nil {
+		return nil, status.Error(codes.Internal, "db")
+	}
+
+	episodeIDs := make([]string, 0, len(req.GetEpisodes()))
+	for _, ep := range req.GetEpisodes() {
+		if ep == nil {
+			continue
+		}
+		provEpID := strings.TrimSpace(ep.GetProviderEpisodeId())
+		if provEpID == "" {
+			continue
+		}
+
+		var episodeID uuid.UUID
+		qFind := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
+		err := tx.QueryRow(ctx, qFind, provider, provEpID).Scan(&episodeID)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return nil, status.Error(codes.Internal, "db")
+			}
+			episodeID = uuid.New()
+			qInsEp := `
+INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at)
+VALUES ($1,$2,$3,$4,'',$5,$6)
+`
+			if _, err := tx.Exec(ctx, qInsEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetIsFiller(), now); err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+			qInsMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
+			if _, err := tx.Exec(ctx, qInsMap, provider, provEpID, episodeID); err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+		} else {
+			qUpd := `
+UPDATE episodes
+SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6
+WHERE id=$1
+`
+			if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetIsFiller(), now); err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+		}
+
+		episodeIDs = append(episodeIDs, episodeID.String())
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "db commit")
+	}
+	return &catalogv1.UpsertHiAnimeEpisodesResponse{EpisodeIds: episodeIDs}, nil
+}
+
+func (s *CatalogService) UpsertJikanAnime(ctx context.Context, req *catalogv1.UpsertJikanAnimeRequest) (*catalogv1.UpsertJikanAnimeResponse, error) {
+	anime := req.GetAnime()
+	if anime == nil {
+		return nil, status.Error(codes.InvalidArgument, "anime is required")
+	}
+	malID := anime.GetMalId()
+	if malID <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "mal_id is required")
+	}
+
+	provider := "mal"
+	externalID := fmt.Sprintf("%d", malID)
+	genresJSON, _ := json.Marshal(anime.GetGenres())
+	now := time.Now().UTC()
+
+	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db begin")
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var animeID uuid.UUID
+	qFind := qSelectAnimeIDByExternal
+	err = tx.QueryRow(ctx, qFind, provider, externalID).Scan(&animeID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.Internal, "db")
+		}
+		animeID = uuid.New()
+		qIns := `
+INSERT INTO anime (id, title, title_english, title_japanese, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, score, created_at, updated_at)
+VALUES ($1,$2,$3,$4,'',$5,$6,$7,'unknown',$8,$9,'',$10,$11,$12,$13)
+`
+		_, err = tx.Exec(ctx, qIns,
+			animeID,
+			anime.GetTitle(),
+			anime.GetTitleEnglish(),
+			anime.GetTitleJapanese(),
+			anime.GetImage(),
+			anime.GetSynopsis(),
+			genresJSON,
+			anime.GetType(),
+			anime.GetStatus(),
+			anime.GetEpisodes(),
+			anime.GetEpisodes(),
+			anime.GetScore(),
+			now, now,
+		)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+		qMap := `INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ($1,$2,$3)`
+		if _, err := tx.Exec(ctx, qMap, provider, externalID, animeID); err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+	} else {
+		qUpd := `
+UPDATE anime
+SET title=$2, title_english=$3, title_japanese=$4, image=$5, description=$6, genres=$7, type=$8, status=$9, total_episodes=$10, score=$11, updated_at=$12
+WHERE id=$1
+`
+		if _, err := tx.Exec(ctx, qUpd,
+			animeID,
+			anime.GetTitle(),
+			anime.GetTitleEnglish(),
+			anime.GetTitleJapanese(),
+			anime.GetImage(),
+			anime.GetSynopsis(),
+			genresJSON,
+			anime.GetType(),
+			anime.GetStatus(),
+			anime.GetEpisodes(),
+			anime.GetScore(),
+			now,
+		); err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "db commit")
+	}
+	return &catalogv1.UpsertJikanAnimeResponse{AnimeId: animeID.String()}, nil
+}
+
+func (s *CatalogService) UpsertAnimeKaiAnime(ctx context.Context, req *catalogv1.UpsertAnimeKaiAnimeRequest) (*catalogv1.UpsertAnimeKaiAnimeResponse, error) {
+	const provider = "animekai"
+
+	anime := req.GetAnime()
+	if anime == nil {
+		return nil, status.Error(codes.InvalidArgument, "anime is required")
+	}
+	provAnimeID := strings.TrimSpace(anime.GetProviderAnimeId())
+	if provAnimeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider_anime_id is required")
+	}
+
+	genresJSON, _ := json.Marshal(anime.GetGenres())
+	now := time.Now().UTC()
+
+	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db begin")
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// 1) resolve or create anime_id
+	var animeID uuid.UUID
+	qFindAnime := `SELECT anime_id FROM external_anime_ids WHERE provider=$1 AND provider_anime_id=$2`
+	err = tx.QueryRow(ctx, qFindAnime, provider, provAnimeID).Scan(&animeID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.Internal, "db")
+		}
+		animeID = uuid.New()
+
+		qInsertAnime := `
+INSERT INTO anime (id, title, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, created_at, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+`
+		_, err = tx.Exec(ctx, qInsertAnime,
+			animeID,
+			anime.GetTitle(),
+			anime.GetUrl(),
+			anime.GetImage(),
+			anime.GetDescription(),
+			genresJSON,
+			anime.GetSubOrDub(),
+			anime.GetType(),
+			anime.GetStatus(),
+			anime.GetOtherName(),
+			anime.GetTotalEpisodes(),
+			now, now,
+		)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+
+		qInsertExt := `INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ($1,$2,$3)`
+		_, err = tx.Exec(ctx, qInsertExt, provider, provAnimeID, animeID)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+	} else {
+		// update existing anime
+		qUpdateAnime := `
+UPDATE anime
+SET title=$2, url=$3, image=$4, description=$5, genres=$6, sub_or_dub=$7, type=$8, status=$9, other_name=$10, total_episodes=$11, updated_at=$12
+WHERE id=$1
+`
+		_, err = tx.Exec(ctx, qUpdateAnime,
+			animeID,
+			anime.GetTitle(),
+			anime.GetUrl(),
+			anime.GetImage(),
+			anime.GetDescription(),
+			genresJSON,
+			anime.GetSubOrDub(),
+			anime.GetType(),
+			anime.GetStatus(),
+			anime.GetOtherName(),
+			anime.GetTotalEpisodes(),
+			now,
+		)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "db")
+		}
+	}
+
+	// 2) upsert episodes + mappings
+	episodeIDs := make([]string, 0, len(anime.GetEpisodes()))
+	for _, ep := range anime.GetEpisodes() {
+		if ep == nil {
+			continue
+		}
+		provEpID := strings.TrimSpace(ep.GetProviderEpisodeId())
+		if provEpID == "" {
+			continue
+		}
+
+		var episodeID uuid.UUID
+		qFindEp := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
+		err = tx.QueryRow(ctx, qFindEp, provider, provEpID).Scan(&episodeID)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return nil, status.Error(codes.Internal, "db")
+			}
+			episodeID = uuid.New()
+			qInsertEp := `
+INSERT INTO episodes (id, anime_id, number, title, url, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6)
+`
+			_, err = tx.Exec(ctx, qInsertEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetUrl(), now)
+			if err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+			qInsertEpMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
+			_, err = tx.Exec(ctx, qInsertEpMap, provider, provEpID, episodeID)
+			if err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+		} else {
+			qUpdateEp := `
+UPDATE episodes
+SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6
+WHERE id=$1
+`
+			_, err = tx.Exec(ctx, qUpdateEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetUrl(), now)
+			if err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+		}
+
+		episodeIDs = append(episodeIDs, episodeID.String())
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "db commit")
+	}
+
+	return &catalogv1.UpsertAnimeKaiAnimeResponse{AnimeId: animeID.String(), EpisodeIds: episodeIDs}, nil
 }

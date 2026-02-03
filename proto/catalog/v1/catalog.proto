@@ -20,6 +20,99 @@ message GetEpisodesByIDsResponse {
   repeated Episode episodes = 1;
 }
 
+message AnimeKaiEpisode {
+  string provider_episode_id = 1;
+  int32 number = 2;
+  string title = 3;
+  string url = 4;
+}
+
+message AnimeKaiAnime {
+  string provider_anime_id = 1;
+  string title = 2;
+  string url = 3;
+  string image = 4;
+  string description = 5;
+  repeated string genres = 6;
+  string sub_or_dub = 7;
+  string type = 8;
+  string status = 9;
+  string other_name = 10;
+  int32 total_episodes = 11;
+
+  repeated AnimeKaiEpisode episodes = 12;
+}
+
+message UpsertAnimeKaiAnimeRequest {
+  AnimeKaiAnime anime = 1;
+}
+
+message UpsertAnimeKaiAnimeResponse {
+  string anime_id = 1;
+  repeated string episode_ids = 2;
+}
+
+message AttachExternalAnimeIDRequest {
+  string anime_id = 1;
+  string provider = 2;
+  string external_id = 3;
+}
+
+message AttachExternalAnimeIDResponse {}
+
+message ResolveAnimeIDByExternalIDRequest {
+  string provider = 1;
+  string external_id = 2;
+}
+
+message ResolveAnimeIDByExternalIDResponse {
+  string anime_id = 1;
+}
+
+message HiAnimeEpisode {
+  string provider_episode_id = 1; // episodeId e.g. "steinsgate-3?ep=230"
+  int32 number = 2;
+  string title = 3;
+  bool is_filler = 4;
+}
+
+message UpsertHiAnimeEpisodesRequest {
+  string anime_id = 1;
+  string hianime_slug = 2;
+  repeated HiAnimeEpisode episodes = 3;
+}
+
+message UpsertHiAnimeEpisodesResponse {
+  repeated string episode_ids = 1;
+}
+
+message JikanAnime {
+  int32 mal_id = 1;
+  string title = 2;
+  string title_english = 3;
+  string title_japanese = 4;
+  string synopsis = 5;
+  repeated string genres = 6;
+  string status = 7;
+  string type = 8;
+  int32 episodes = 9;
+  string image = 10;
+  float score = 11;
+}
+
+message UpsertJikanAnimeRequest {
+  JikanAnime anime = 1;
+}
+
+message UpsertJikanAnimeResponse {
+  string anime_id = 1;
+}
+
 service CatalogService {
   rpc GetEpisodesByIDs(GetEpisodesByIDsRequest) returns (GetEpisodesByIDsResponse);
+  rpc UpsertAnimeKaiAnime(UpsertAnimeKaiAnimeRequest) returns (UpsertAnimeKaiAnimeResponse);
+  rpc AttachExternalAnimeID(AttachExternalAnimeIDRequest) returns (AttachExternalAnimeIDResponse);
+  rpc ResolveAnimeIDByExternalID(ResolveAnimeIDByExternalIDRequest) returns (ResolveAnimeIDByExternalIDResponse);
+  rpc UpsertHiAnimeEpisodes(UpsertHiAnimeEpisodesRequest) returns (UpsertHiAnimeEpisodesResponse);
+  rpc UpsertJikanAnime(UpsertJikanAnimeRequest) returns (UpsertJikanAnimeResponse);
 }
