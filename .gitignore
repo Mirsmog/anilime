@@ -11,3 +11,5 @@ bin/
 # Go
 *.test
 *.out
+
+agentmem.md
