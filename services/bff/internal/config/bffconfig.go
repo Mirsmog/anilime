@@ -7,16 +7,16 @@ import (
 )
 
 type BFFConfig struct {
-	JWTSecret            []byte
-	AuthGRPCAddr         string
-	CatalogGRPCAddr      string
-	ActivityGRPCAddr     string
-	SearchGRPCAddr       string
-	StreamingGRPCAddr    string
-	HLSProxyBaseURL      string
+	JWTSecret             []byte
+	AuthGRPCAddr          string
+	CatalogGRPCAddr       string
+	ActivityGRPCAddr      string
+	SearchGRPCAddr        string
+	StreamingGRPCAddr     string
+	HLSProxyBaseURL       string
 	HLSProxySigningSecret string
-	NATSURL              string
-	JikanBaseURL         string
+	NATSURL               string
+	JikanBaseURL          string
 }
 
 func LoadBFF() (BFFConfig, error) {
