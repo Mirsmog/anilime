@@ -8,7 +8,6 @@ package catalogv1
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -21,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	CatalogService_GetEpisodesByIDs_FullMethodName           = "/catalog.v1.CatalogService/GetEpisodesByIDs"
+	CatalogService_GetProviderEpisodeID_FullMethodName       = "/catalog.v1.CatalogService/GetProviderEpisodeID"
 	CatalogService_GetAnimeByIDs_FullMethodName              = "/catalog.v1.CatalogService/GetAnimeByIDs"
 	CatalogService_GetAnimeIDs_FullMethodName                = "/catalog.v1.CatalogService/GetAnimeIDs"
 	CatalogService_UpsertAnimeKaiAnime_FullMethodName        = "/catalog.v1.CatalogService/UpsertAnimeKaiAnime"
@@ -35,6 +35,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CatalogServiceClient interface {
 	GetEpisodesByIDs(ctx context.Context, in *GetEpisodesByIDsRequest, opts ...grpc.CallOption) (*GetEpisodesByIDsResponse, error)
+	GetProviderEpisodeID(ctx context.Context, in *GetProviderEpisodeIDRequest, opts ...grpc.CallOption) (*GetProviderEpisodeIDResponse, error)
 	GetAnimeByIDs(ctx context.Context, in *GetAnimeByIDsRequest, opts ...grpc.CallOption) (*GetAnimeByIDsResponse, error)
 	GetAnimeIDs(ctx context.Context, in *GetAnimeIDsRequest, opts ...grpc.CallOption) (*GetAnimeIDsResponse, error)
 	UpsertAnimeKaiAnime(ctx context.Context, in *UpsertAnimeKaiAnimeRequest, opts ...grpc.CallOption) (*UpsertAnimeKaiAnimeResponse, error)
@@ -56,6 +57,16 @@ func (c *catalogServiceClient) GetEpisodesByIDs(ctx context.Context, in *GetEpis
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEpisodesByIDsResponse)
 	err := c.cc.Invoke(ctx, CatalogService_GetEpisodesByIDs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *catalogServiceClient) GetProviderEpisodeID(ctx context.Context, in *GetProviderEpisodeIDRequest, opts ...grpc.CallOption) (*GetProviderEpisodeIDResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProviderEpisodeIDResponse)
+	err := c.cc.Invoke(ctx, CatalogService_GetProviderEpisodeID_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +148,7 @@ func (c *catalogServiceClient) UpsertJikanAnime(ctx context.Context, in *UpsertJ
 // for forward compatibility.
 type CatalogServiceServer interface {
 	GetEpisodesByIDs(context.Context, *GetEpisodesByIDsRequest) (*GetEpisodesByIDsResponse, error)
+	GetProviderEpisodeID(context.Context, *GetProviderEpisodeIDRequest) (*GetProviderEpisodeIDResponse, error)
 	GetAnimeByIDs(context.Context, *GetAnimeByIDsRequest) (*GetAnimeByIDsResponse, error)
 	GetAnimeIDs(context.Context, *GetAnimeIDsRequest) (*GetAnimeIDsResponse, error)
 	UpsertAnimeKaiAnime(context.Context, *UpsertAnimeKaiAnimeRequest) (*UpsertAnimeKaiAnimeResponse, error)
@@ -156,6 +168,9 @@ type UnimplementedCatalogServiceServer struct{}
 
 func (UnimplementedCatalogServiceServer) GetEpisodesByIDs(context.Context, *GetEpisodesByIDsRequest) (*GetEpisodesByIDsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEpisodesByIDs not implemented")
+}
+func (UnimplementedCatalogServiceServer) GetProviderEpisodeID(context.Context, *GetProviderEpisodeIDRequest) (*GetProviderEpisodeIDResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProviderEpisodeID not implemented")
 }
 func (UnimplementedCatalogServiceServer) GetAnimeByIDs(context.Context, *GetAnimeByIDsRequest) (*GetAnimeByIDsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAnimeByIDs not implemented")
@@ -213,6 +228,24 @@ func _CatalogService_GetEpisodesByIDs_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CatalogServiceServer).GetEpisodesByIDs(ctx, req.(*GetEpisodesByIDsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CatalogService_GetProviderEpisodeID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProviderEpisodeIDRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).GetProviderEpisodeID(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_GetProviderEpisodeID_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).GetProviderEpisodeID(ctx, req.(*GetProviderEpisodeIDRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -353,6 +386,10 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEpisodesByIDs",
 			Handler:    _CatalogService_GetEpisodesByIDs_Handler,
+		},
+		{
+			MethodName: "GetProviderEpisodeID",
+			Handler:    _CatalogService_GetProviderEpisodeID_Handler,
 		},
 		{
 			MethodName: "GetAnimeByIDs",

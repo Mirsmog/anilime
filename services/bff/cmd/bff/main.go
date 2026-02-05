@@ -83,6 +83,13 @@ func main() {
 	}
 	defer searchc.Conn.Close()
 
+	streamingc, err := grpcclient.NewStreamingResolverClient(bffCfg.StreamingGRPCAddr)
+	if err != nil {
+		log.Error("init streaming grpc client", zap.Error(err))
+		run.Exit(1)
+	}
+	defer streamingc.Conn.Close()
+
 	// Example route: in real BFF you aggregate from other services.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -96,6 +103,11 @@ func main() {
 	r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
 
 	r.Get("/v1/search", bffhandlers.Search(searchc.Client))
+
+	r.Group(func(r chi.Router) {
+		r.Use(auth.RequireUser(verifier))
+		r.Get("/v1/watch/{episode_id}", bffhandlers.Watch(streamingc.Client, bffCfg.HLSProxyBaseURL, bffCfg.HLSProxySigningSecret))
+	})
 
 	r.Route("/v1/admin", func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))

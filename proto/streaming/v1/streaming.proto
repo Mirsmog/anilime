@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package streaming.v1;
+
+option go_package = "github.com/example/anime-platform/gen/streaming/v1;streamingv1";
+
+message GetPlaybackRequest {
+  string episode_id = 1;
+  string category = 2; // sub|dub
+  string server = 3;   // provider server id
+}
+
+message PlaybackSource {
+  string url = 1;
+  string quality = 2;
+  bool is_m3u8 = 3;
+}
+
+message PlaybackTrack {
+  string kind = 1;
+  string file = 2;
+  string label = 3;
+  string language = 4;
+  bool is_default = 5;
+}
+
+message PlaybackIntroOutro {
+  float start = 1;
+  float end = 2;
+}
+
+message PlaybackHeaders {
+  map<string, string> headers = 1;
+}
+
+message GetPlaybackResponse {
+  repeated PlaybackSource sources = 1;
+  repeated PlaybackTrack tracks = 2;
+  PlaybackIntroOutro intro = 3;
+  PlaybackIntroOutro outro = 4;
+  PlaybackHeaders headers = 5;
+  string provider_episode_id = 6;
+}
+
+service StreamingResolverService {
+  rpc GetPlayback(GetPlaybackRequest) returns (GetPlaybackResponse);
+}

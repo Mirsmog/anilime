@@ -48,6 +48,15 @@ message GetEpisodesByIDsResponse {
   repeated Episode episodes = 1;
 }
 
+message GetProviderEpisodeIDRequest {
+  string episode_id = 1;
+  string provider = 2;
+}
+
+message GetProviderEpisodeIDResponse {
+  string provider_episode_id = 1;
+}
+
 message AnimeKaiEpisode {
   string provider_episode_id = 1;
   int32 number = 2;
@@ -138,6 +147,7 @@ message UpsertJikanAnimeResponse {
 
 service CatalogService {
   rpc GetEpisodesByIDs(GetEpisodesByIDsRequest) returns (GetEpisodesByIDsResponse);
+  rpc GetProviderEpisodeID(GetProviderEpisodeIDRequest) returns (GetProviderEpisodeIDResponse);
   rpc GetAnimeByIDs(GetAnimeByIDsRequest) returns (GetAnimeByIDsResponse);
   rpc GetAnimeIDs(GetAnimeIDsRequest) returns (GetAnimeIDsResponse);
   rpc UpsertAnimeKaiAnime(UpsertAnimeKaiAnimeRequest) returns (UpsertAnimeKaiAnimeResponse);

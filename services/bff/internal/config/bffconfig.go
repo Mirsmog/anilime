@@ -7,13 +7,16 @@ import (
 )
 
 type BFFConfig struct {
-	JWTSecret        []byte
-	AuthGRPCAddr     string
-	CatalogGRPCAddr  string
-	ActivityGRPCAddr string
-	SearchGRPCAddr   string
-	NATSURL          string
-	JikanBaseURL     string
+	JWTSecret            []byte
+	AuthGRPCAddr         string
+	CatalogGRPCAddr      string
+	ActivityGRPCAddr     string
+	SearchGRPCAddr       string
+	StreamingGRPCAddr    string
+	HLSProxyBaseURL      string
+	HLSProxySigningSecret string
+	NATSURL              string
+	JikanBaseURL         string
 }
 
 func LoadBFF() (BFFConfig, error) {
@@ -37,6 +40,18 @@ func LoadBFF() (BFFConfig, error) {
 	if searchAddr == "" {
 		return BFFConfig{}, errors.New("SEARCH_GRPC_ADDR is required")
 	}
+	streamingAddr := strings.TrimSpace(os.Getenv("STREAMING_GRPC_ADDR"))
+	if streamingAddr == "" {
+		return BFFConfig{}, errors.New("STREAMING_GRPC_ADDR is required")
+	}
+	hlsBase := strings.TrimSpace(os.Getenv("HLS_PROXY_BASE_URL"))
+	if hlsBase == "" {
+		return BFFConfig{}, errors.New("HLS_PROXY_BASE_URL is required")
+	}
+	hlsSecret := strings.TrimSpace(os.Getenv("HLS_SIGNING_SECRET"))
+	if hlsSecret == "" {
+		return BFFConfig{}, errors.New("HLS_SIGNING_SECRET is required")
+	}
 
 	natsURL := strings.TrimSpace(os.Getenv("NATS_URL"))
 	if natsURL == "" {
@@ -47,5 +62,5 @@ func LoadBFF() (BFFConfig, error) {
 		jikanURL = "https://api.jikan.moe/v4"
 	}
 
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
+	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
 }

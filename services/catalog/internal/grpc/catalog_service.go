@@ -74,6 +74,24 @@ WHERE id::text = ANY($1)
 	return resp, nil
 }
 
+func (s *CatalogService) GetProviderEpisodeID(ctx context.Context, req *catalogv1.GetProviderEpisodeIDRequest) (*catalogv1.GetProviderEpisodeIDResponse, error) {
+	episodeID := strings.TrimSpace(req.GetEpisodeId())
+	provider := strings.TrimSpace(req.GetProvider())
+	if episodeID == "" || provider == "" {
+		return nil, status.Error(codes.InvalidArgument, "episode_id and provider required")
+	}
+
+	var providerEpisodeID string
+	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id::text = $1 AND provider = $2 ORDER BY provider_episode_id DESC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.NotFound, "provider episode not found")
+		}
+		return nil, status.Error(codes.Internal, "db query")
+	}
+	return &catalogv1.GetProviderEpisodeIDResponse{ProviderEpisodeId: providerEpisodeID}, nil
+}
+
 func (s *CatalogService) GetAnimeIDs(ctx context.Context, _ *catalogv1.GetAnimeIDsRequest) (*catalogv1.GetAnimeIDsResponse, error) {
 	rows, err := s.DB.Query(ctx, `SELECT id::text FROM anime ORDER BY updated_at DESC`)
 	if err != nil {
