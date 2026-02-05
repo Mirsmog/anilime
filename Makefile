@@ -120,8 +120,8 @@ migrate-activity-down:
 .PHONY: proto
 proto:
 	@if [ ! -x "$(BUF)" ]; then echo "buf not installed: make tools"; exit 1; fi
-	$(BUF) lint
-	$(BUF) generate
+	PATH=$(GOBIN):$$PATH $(BUF) lint
+	PATH=$(GOBIN):$$PATH $(BUF) generate
 
 .PHONY: build
 build:

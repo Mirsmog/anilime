@@ -37,9 +37,9 @@ func (s Store) CreateUser(ctx context.Context, p CreateUserParams) (domain.User,
 	q := `
 INSERT INTO users (id, email, username, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id::text, email, username, created_at;
+RETURNING id::text, email, username, role, created_at;
 `
-	err := s.DB.QueryRow(ctx, q, id, p.Email, p.Username, p.PasswordHash).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
+	err := s.DB.QueryRow(ctx, q, id, p.Email, p.Username, p.PasswordHash).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.CreatedAt)
 	if err != nil {
 		// unique violation
 		var pgErr *pgconn.PgError
@@ -65,13 +65,13 @@ func (s Store) FindUserByLogin(ctx context.Context, login string) (UserRow, erro
 	}
 
 	q := `
-SELECT id::text, email, username, password_hash, created_at
+SELECT id::text, email, username, role, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1) OR lower(username) = lower($1)
 LIMIT 1;
 `
 	var row UserRow
-	err := s.DB.QueryRow(ctx, q, login).Scan(&row.User.ID, &row.User.Email, &row.User.Username, &row.PasswordHash, &row.User.CreatedAt)
+	err := s.DB.QueryRow(ctx, q, login).Scan(&row.User.ID, &row.User.Email, &row.User.Username, &row.User.Role, &row.PasswordHash, &row.User.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return UserRow{}, ErrNotFound

@@ -32,9 +32,24 @@ func Open(ctx context.Context) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, err
+
+	// Retry ping for a short window to tolerate DB startup.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if err := pool.Ping(ctx); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			pool.Close()
+			return nil, err
+		}
+		t := 300 * time.Millisecond
+		select {
+		case <-ctx.Done():
+			pool.Close()
+			return nil, ctx.Err()
+		case <-time.After(t):
+		}
 	}
 	return pool, nil
 }

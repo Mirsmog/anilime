@@ -11,9 +11,9 @@ import (
 )
 
 func (s Store) GetUserByID(ctx context.Context, userID string) (domain.User, error) {
-	q := `SELECT id::text, email, username, created_at FROM users WHERE id::text = $1 LIMIT 1;`
+	q := `SELECT id::text, email, username, role, created_at FROM users WHERE id::text = $1 LIMIT 1;`
 	var u domain.User
-	err := s.DB.QueryRow(ctx, q, userID).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
+	err := s.DB.QueryRow(ctx, q, userID).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, ErrNotFound

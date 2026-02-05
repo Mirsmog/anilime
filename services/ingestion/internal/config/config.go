@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -11,6 +12,9 @@ type Config struct {
 	AnimeKaiBaseURL string
 	HiAnimeBaseURL  string
 	JikanBaseURL    string
+	NATSURL         string
+	JikanRPS        int
+	HiAnimeRPS      int
 }
 
 func Load() (Config, error) {
@@ -30,5 +34,24 @@ func Load() (Config, error) {
 	if jikanURL == "" {
 		jikanURL = "https://api.jikan.moe/v4"
 	}
-	return Config{CatalogGRPCAddr: addr, AnimeKaiBaseURL: base, HiAnimeBaseURL: hia, JikanBaseURL: jikanURL}, nil
+
+	natsURL := strings.TrimSpace(os.Getenv("NATS_URL"))
+	if natsURL == "" {
+		natsURL = "nats://nats:4222"
+	}
+
+	jikanRPS := 1
+	if v := strings.TrimSpace(os.Getenv("JIKAN_RPS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			jikanRPS = n
+		}
+	}
+	hiaRPS := 1
+	if v := strings.TrimSpace(os.Getenv("HIANIME_RPS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			hiaRPS = n
+		}
+	}
+
+	return Config{CatalogGRPCAddr: addr, AnimeKaiBaseURL: base, HiAnimeBaseURL: hia, JikanBaseURL: jikanURL, NATSURL: natsURL, JikanRPS: jikanRPS, HiAnimeRPS: hiaRPS}, nil
 }

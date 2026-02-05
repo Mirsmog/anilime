@@ -19,9 +19,10 @@ type Service struct {
 
 type AccessClaims struct {
 	jwt.RegisteredClaims
+	Role string `json:"role"`
 }
 
-func (s Service) NewAccessToken(userID string, now time.Time) (string, time.Time, error) {
+func (s Service) NewAccessToken(userID, role string, now time.Time) (string, time.Time, error) {
 	if len(s.Secret) == 0 {
 		return "", time.Time{}, errors.New("missing jwt secret")
 	}
@@ -36,6 +37,7 @@ func (s Service) NewAccessToken(userID string, now time.Time) (string, time.Time
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
 		},
+		Role: role,
 	}
 
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

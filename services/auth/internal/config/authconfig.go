@@ -8,9 +8,10 @@ import (
 )
 
 type AuthConfig struct {
-	JWTSecret       []byte
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
+	JWTSecret              []byte
+	AccessTokenTTL         time.Duration
+	RefreshTokenTTL        time.Duration
+	BootstrapAdminUsername string
 }
 
 func LoadAuth() (AuthConfig, error) {
@@ -22,7 +23,8 @@ func LoadAuth() (AuthConfig, error) {
 	accessTTL := parseDurationWithDefault(os.Getenv("ACCESS_TOKEN_TTL"), 15*time.Minute)
 	refreshTTL := parseDurationWithDefault(os.Getenv("REFRESH_TOKEN_TTL"), 30*24*time.Hour)
 
-	return AuthConfig{JWTSecret: []byte(secret), AccessTokenTTL: accessTTL, RefreshTokenTTL: refreshTTL}, nil
+	bootstrap := strings.TrimSpace(os.Getenv("BOOTSTRAP_ADMIN_USERNAME"))
+	return AuthConfig{JWTSecret: []byte(secret), AccessTokenTTL: accessTTL, RefreshTokenTTL: refreshTTL, BootstrapAdminUsername: bootstrap}, nil
 }
 
 func parseDurationWithDefault(v string, def time.Duration) time.Duration {

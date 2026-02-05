@@ -10,14 +10,21 @@ import (
 )
 
 type ctxKeyUserID struct{}
+type ctxKeyRole struct{}
 
 func UserIDFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyUserID{}).(string)
 	return v, ok
 }
 
+func RoleFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(ctxKeyRole{}).(string)
+	return v, ok
+}
+
 type Claims struct {
 	jwt.RegisteredClaims
+	Role string `json:"role"`
 }
 
 type JWTVerifier struct {
@@ -61,6 +68,9 @@ func RequireUser(verifier JWTVerifier) func(next http.Handler) http.Handler {
 				return
 			}
 			ctx := context.WithValue(r.Context(), ctxKeyUserID{}, claims.Subject)
+			if strings.TrimSpace(claims.Role) != "" {
+				ctx = context.WithValue(ctx, ctxKeyRole{}, claims.Role)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

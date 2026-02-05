@@ -56,6 +56,15 @@ func (s *AuthService) Register(ctx context.Context, req *authv1.RegisterRequest)
 		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
+	// If bootstrap admin username matches, promote this user immediately.
+	if strings.EqualFold(strings.TrimSpace(s.Cfg.BootstrapAdminUsername), u.Username) && s.Cfg.BootstrapAdminUsername != "" {
+		// best-effort
+		if id, err := uuid.Parse(u.ID); err == nil {
+			_ = s.Store.SetUserRoleByID(ctx, id, "admin")
+			u.Role = "admin"
+		}
+	}
+
 	resp, err := s.issueTokens(ctx, u, clientIPFromMD(ctx), userAgentFromMD(ctx))
 	if err != nil {
 		return nil, errInternal("INTERNAL", "Internal error")
@@ -108,7 +117,7 @@ func (s *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (
 		return nil, errInternal("INTERNAL", "Internal error")
 	}
 
-	access, exp, err := s.Tokens.NewAccessToken(sess.UserID.String(), now)
+	access, exp, err := s.Tokens.NewAccessToken(sess.UserID.String(), u.Role, now)
 	if err != nil {
 		return nil, errInternal("INTERNAL", "Internal error")
 	}
@@ -179,7 +188,7 @@ func (s *AuthService) Me(ctx context.Context, _ *authv1.MeRequest) (*authv1.MeRe
 
 func (s *AuthService) issueTokens(ctx context.Context, u domain.User, ip net.IP, userAgent string) (*authv1.RegisterResponse, error) {
 	now := time.Now().UTC()
-	access, exp, err := s.Tokens.NewAccessToken(u.ID, now)
+	access, exp, err := s.Tokens.NewAccessToken(u.ID, u.Role, now)
 	if err != nil {
 		return nil, err
 	}

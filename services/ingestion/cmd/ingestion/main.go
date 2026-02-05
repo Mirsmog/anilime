@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"encoding/json"
+
+	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
@@ -19,6 +23,10 @@ import (
 	"github.com/example/anime-platform/services/ingestion/internal/hianime"
 	"github.com/example/anime-platform/services/ingestion/internal/jikan"
 	"github.com/example/anime-platform/services/ingestion/internal/jobs"
+	"github.com/example/anime-platform/services/ingestion/internal/queue"
+	"github.com/example/anime-platform/services/ingestion/internal/ratelimit"
+
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -53,11 +61,72 @@ func main() {
 	_ = job
 
 	jc := jikan.New(ink.JikanBaseURL)
-	jobs.JikanTrigger{Log: log, Jikan: jc, Catalog: catc.Client}.Register(r)
-
 	hc := hianime.New(ink.HiAnimeBaseURL)
 	hijob := jobs.HiAnimeSync{HiAnime: hc, Catalog: catc.Client, Jikan: jc}
-	jobs.HiAnimeTrigger{Log: log, Job: hijob}.Register(r)
+
+	// Optional HTTP triggers for local debugging. Prefer NATS jobs in production.
+	if strings.TrimSpace(os.Getenv("ENABLE_HTTP_TRIGGERS")) == "true" {
+		jobs.JikanTrigger{Log: log, Jikan: jc, Catalog: catc.Client}.Register(r)
+		jobs.HiAnimeTrigger{Log: log, Job: hijob}.Register(r)
+	}
+
+	// Start JetStream worker
+	nc, err := nats.Connect(ink.NATSURL)
+	if err != nil {
+		log.Error("nats connect", zap.Error(err))
+		run.Exit(1)
+	}
+	defer nc.Close()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Error("jetstream", zap.Error(err))
+		run.Exit(1)
+	}
+
+	jikanLimiter := ratelimit.NewRPS(ink.JikanRPS)
+	defer jikanLimiter.Stop()
+	hiaLimiter := ratelimit.NewRPS(ink.HiAnimeRPS)
+	defer hiaLimiter.Stop()
+
+	wrk, err := queue.NewWorker(log, nc, queue.Handlers{
+		JikanSync: func(ctx context.Context, malID int) error {
+			if err := jikanLimiter.Wait(ctx); err != nil {
+				return err
+			}
+			resp, err := jc.GetAnime(ctx, malID)
+			if err != nil {
+				return err
+			}
+			pb := jikan.ToCatalogProto(resp)
+			if _, err := catc.Client.UpsertJikanAnime(ctx, &catalogv1.UpsertJikanAnimeRequest{Anime: pb}); err != nil {
+				return err
+			}
+			b, _ := json.Marshal(queue.HiAnimeSyncJob{MALID: malID})
+			_, err = js.Publish("ingestion.hianime.sync", b)
+			return err
+		},
+		HiAnimeSync: func(ctx context.Context, malID int) error {
+			if err := hiaLimiter.Wait(ctx); err != nil {
+				return err
+			}
+			_, _, _, err := hijob.SyncEpisodesByMALID(ctx, malID, "")
+			return err
+		},
+	})
+	if err != nil {
+		log.Error("worker init", zap.Error(err))
+		run.Exit(1)
+	}
+	if err := wrk.EnsureStream(context.Background()); err != nil {
+		log.Error("ensure stream", zap.Error(err))
+		run.Exit(1)
+	}
+	go func() {
+		if err := wrk.Run(context.Background()); err != nil {
+			log.Error("worker stopped", zap.Error(err))
+		}
+	}()
 
 	r.Get("/v1/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

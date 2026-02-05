@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"net"
+	"os"
 	"os/signal"
+
 	"syscall"
 	"time"
+
+	"github.com/example/anime-platform/services/auth/internal/bootstrap"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -47,6 +51,15 @@ func main() {
 	if err != nil {
 		log.Error("load auth config", zap.Error(err))
 		run.Exit(1)
+	}
+
+	// Bootstrap admin (optional)
+	if u := os.Getenv("BOOTSTRAP_ADMIN_USERNAME"); u != "" {
+		if err := bootstrap.PromoteAdmin(context.Background(), a.DB, u); err != nil {
+			log.Error("bootstrap admin", zap.Error(err))
+			run.Exit(1)
+		}
+		log.Info("bootstrap admin ensured", zap.String("username", u))
 	}
 
 	grpcCfg := grpcconfig.LoadGRPC()
