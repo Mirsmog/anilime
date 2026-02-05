@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -16,8 +17,9 @@ import (
 	"github.com/example/anime-platform/internal/platform/db"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
-	grpcconfig "github.com/example/anime-platform/services/catalog/internal/config"
+	catalogconfig "github.com/example/anime-platform/services/catalog/internal/config"
 	grpcapi "github.com/example/anime-platform/services/catalog/internal/grpc"
+	"github.com/example/anime-platform/services/catalog/internal/outbox"
 )
 
 func main() {
@@ -42,7 +44,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	grpcCfg := grpcconfig.LoadGRPC()
+	grpcCfg := catalogconfig.LoadGRPC()
+	outboxCfg := catalogconfig.LoadOutbox()
+
 	lis, err := net.Listen("tcp", grpcCfg.Addr)
 	if err != nil {
 		log.Error("listen", zap.Error(err))
@@ -53,7 +57,18 @@ func main() {
 	catalogv1.RegisterCatalogServiceServer(grpcSrv, &grpcapi.CatalogService{DB: pool})
 	reflection.Register(grpcSrv)
 
-	log.Info("grpc server starting", zap.String("addr", grpcCfg.Addr))
+	nc, err := nats.Connect(outboxCfg.NATSURL)
+	if err != nil {
+		log.Error("nats connect", zap.Error(err))
+		run.Exit(1)
+	}
+	defer nc.Close()
+
+	publisher, err := outbox.NewPublisher(log, pool, nc)
+	if err != nil {
+		log.Error("outbox publisher", zap.Error(err))
+		run.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -70,6 +85,15 @@ func main() {
 			grpcSrv.Stop()
 		}
 	}()
+
+	go func() {
+		if err := publisher.Run(ctx); err != nil {
+			log.Error("outbox publisher stopped", zap.Error(err))
+			stop()
+		}
+	}()
+
+	log.Info("grpc server starting", zap.String("addr", grpcCfg.Addr))
 
 	if err := grpcSrv.Serve(lis); err != nil {
 		log.Error("grpc serve", zap.Error(err))

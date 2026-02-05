@@ -35,6 +35,29 @@ services:
     ports:
       - "7700:7700"
 
+  search:
+    build:
+      context: .
+      dockerfile: services/search/Dockerfile
+    environment:
+      SERVICE_NAME: search
+      LOG_LEVEL: debug
+      GRPC_ADDR: :9094
+      CATALOG_GRPC_ADDR: catalog:9092
+      NATS_URL: nats://nats:4222
+      MEILI_URL: http://meilisearch:7700
+      MEILI_API_KEY: dev-master-key
+      REINDEX_INTERVAL: 24h
+    ports:
+      - "9094:9094"
+    depends_on:
+      catalog:
+        condition: service_started
+      nats:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+
   bff:
     build:
       context: .
@@ -47,6 +70,9 @@ services:
       AUTH_GRPC_ADDR: auth:9091
       CATALOG_GRPC_ADDR: catalog:9092
       ACTIVITY_GRPC_ADDR: activity:9093
+      SEARCH_GRPC_ADDR: search:9094
+      NATS_URL: nats://nats:4222
+      JIKAN_BASE_URL: https://api.jikan.moe/v4
     ports:
       - "8080:8080"
     depends_on:
@@ -69,6 +95,7 @@ services:
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 720h
       GRPC_ADDR: :9091
+      BOOTSTRAP_ADMIN_USERNAME: admin
     ports:
       - "9091:9091"
     depends_on:
@@ -84,11 +111,14 @@ services:
       LOG_LEVEL: debug
       DATABASE_URL: postgres://app:app@postgres:5432/catalog?sslmode=disable
       GRPC_ADDR: :9092
+      NATS_URL: nats://nats:4222
     ports:
       - "9092:9092"
     depends_on:
       postgres:
         condition: service_healthy
+      nats:
+        condition: service_started
 
   ingestion:
     build:
@@ -102,6 +132,10 @@ services:
       ANIMEKAI_BASE_URL: https://api.consumet.org/anime/animekai
       HIANIME_BASE_URL: https://void-roan-six.vercel.app/api/v2
       JIKAN_BASE_URL: https://api.jikan.moe/v4
+      NATS_URL: nats://nats:4222
+      JIKAN_RPS: 1
+      HIANIME_RPS: 1
+      ENABLE_HTTP_TRIGGERS: "false"
     ports:
       - "8083:8083"
     depends_on:

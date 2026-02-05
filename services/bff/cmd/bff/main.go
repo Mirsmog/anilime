@@ -13,8 +13,12 @@ import (
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
+	"github.com/example/anime-platform/services/bff/internal/admin"
 	bffconfig "github.com/example/anime-platform/services/bff/internal/config"
 	"github.com/example/anime-platform/services/bff/internal/grpcclient"
+
+	"github.com/nats-io/nats.go"
+
 	bffhandlers "github.com/example/anime-platform/services/bff/internal/handlers"
 )
 
@@ -39,6 +43,18 @@ func main() {
 	httpserver.SetupRouter(r)
 
 	verifier := auth.JWTVerifier{Secret: bffCfg.JWTSecret}
+
+	nc, err := nats.Connect(bffCfg.NATSURL)
+	if err != nil {
+		log.Error("nats connect", zap.Error(err))
+		run.Exit(1)
+	}
+	defer nc.Close()
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Error("jetstream", zap.Error(err))
+		run.Exit(1)
+	}
 	authc, err := grpcclient.NewAuthClient(bffCfg.AuthGRPCAddr)
 	if err != nil {
 		log.Error("init auth grpc client", zap.Error(err))
@@ -60,6 +76,13 @@ func main() {
 	}
 	defer activityc.Conn.Close()
 
+	searchc, err := grpcclient.NewSearchClient(bffCfg.SearchGRPCAddr)
+	if err != nil {
+		log.Error("init search grpc client", zap.Error(err))
+		run.Exit(1)
+	}
+	defer searchc.Conn.Close()
+
 	// Example route: in real BFF you aggregate from other services.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -71,6 +94,14 @@ func main() {
 	r.Post("/v1/auth/login", bffhandlers.Login(authc.Client))
 	r.Post("/v1/auth/refresh", bffhandlers.Refresh(authc.Client))
 	r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
+
+	r.Get("/v1/search", bffhandlers.Search(searchc.Client))
+
+	r.Route("/v1/admin", func(r chi.Router) {
+		r.Use(auth.RequireUser(verifier))
+		r.Use(auth.RequireAdmin)
+		admin.BackfillHandler{JikanBaseURL: bffCfg.JikanBaseURL, JS: js}.Register(r)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))

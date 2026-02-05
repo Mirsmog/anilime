@@ -12,6 +12,34 @@ message Episode {
   string aired_at_rfc3339 = 5;
 }
 
+message Anime {
+  string id = 1;
+  string title = 2;
+  string title_english = 3;
+  string title_japanese = 4;
+  string image = 5;
+  string description = 6;
+  repeated string genres = 7;
+  float score = 8;
+  string status = 9;
+  string type = 10;
+  int32 total_episodes = 11;
+}
+
+message GetAnimeByIDsRequest {
+  repeated string anime_ids = 1;
+}
+
+message GetAnimeByIDsResponse {
+  repeated Anime anime = 1;
+}
+
+message GetAnimeIDsRequest {}
+
+message GetAnimeIDsResponse {
+  repeated string anime_ids = 1;
+}
+
 message GetEpisodesByIDsRequest {
   repeated string episode_ids = 1;
 }
@@ -110,6 +138,8 @@ message UpsertJikanAnimeResponse {
 
 service CatalogService {
   rpc GetEpisodesByIDs(GetEpisodesByIDsRequest) returns (GetEpisodesByIDsResponse);
+  rpc GetAnimeByIDs(GetAnimeByIDsRequest) returns (GetAnimeByIDsResponse);
+  rpc GetAnimeIDs(GetAnimeIDsRequest) returns (GetAnimeIDsResponse);
   rpc UpsertAnimeKaiAnime(UpsertAnimeKaiAnimeRequest) returns (UpsertAnimeKaiAnimeResponse);
   rpc AttachExternalAnimeID(AttachExternalAnimeIDRequest) returns (AttachExternalAnimeIDResponse);
   rpc ResolveAnimeIDByExternalID(ResolveAnimeIDByExternalIDRequest) returns (ResolveAnimeIDByExternalIDResponse);

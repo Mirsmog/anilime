@@ -22,7 +22,20 @@ type CatalogService struct {
 	DB *pgxpool.Pool
 }
 
+const (
+	catalogEventAnimeUpserted = "catalog.anime.upserted"
+)
+
 const qSelectAnimeIDByExternal = `SELECT anime_id FROM external_anime_ids WHERE provider=$1 AND provider_anime_id=$2`
+
+func (s *CatalogService) insertOutboxEvent(ctx context.Context, tx pgx.Tx, eventType string, payload any) error {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO catalog_outbox (id, event_type, payload) VALUES ($1,$2,$3)`, uuid.New(), eventType, b)
+	return err
+}
 
 func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.GetEpisodesByIDsRequest) (*catalogv1.GetEpisodesByIDsResponse, error) {
 	ids := req.GetEpisodeIds()
@@ -57,6 +70,71 @@ WHERE id::text = ANY($1)
 			pb.AiredAtRfc3339 = airedAt.UTC().Format(time.RFC3339)
 		}
 		resp.Episodes = append(resp.Episodes, pb)
+	}
+	return resp, nil
+}
+
+func (s *CatalogService) GetAnimeIDs(ctx context.Context, _ *catalogv1.GetAnimeIDsRequest) (*catalogv1.GetAnimeIDsResponse, error) {
+	rows, err := s.DB.Query(ctx, `SELECT id::text FROM anime ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db query")
+	}
+	defer rows.Close()
+
+	resp := &catalogv1.GetAnimeIDsResponse{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, status.Error(codes.Internal, "db scan")
+		}
+		resp.AnimeIds = append(resp.AnimeIds, id)
+	}
+	return resp, nil
+}
+
+func (s *CatalogService) GetAnimeByIDs(ctx context.Context, req *catalogv1.GetAnimeByIDsRequest) (*catalogv1.GetAnimeByIDsResponse, error) {
+	ids := req.GetAnimeIds()
+	if len(ids) == 0 {
+		return &catalogv1.GetAnimeByIDsResponse{Anime: nil}, nil
+	}
+
+	q := `
+SELECT id::text, title, title_english, title_japanese, image, description, genres, score, status, type, total_episodes
+FROM anime
+WHERE id::text = ANY($1)
+`
+	rows, err := s.DB.Query(ctx, q, ids)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db query")
+	}
+	defer rows.Close()
+
+	resp := &catalogv1.GetAnimeByIDsResponse{}
+	for rows.Next() {
+		var (
+			id, title, titleEnglish, titleJapanese, image, description, animeStatus, animeType string
+			genresJSON                                                                         []byte
+			score                                                                              float32
+			totalEpisodes                                                                      int32
+		)
+		if err := rows.Scan(&id, &title, &titleEnglish, &titleJapanese, &image, &description, &genresJSON, &score, &animeStatus, &animeType, &totalEpisodes); err != nil {
+			return nil, status.Error(codes.Internal, "db scan")
+		}
+		var genres []string
+		_ = json.Unmarshal(genresJSON, &genres)
+		resp.Anime = append(resp.Anime, &catalogv1.Anime{
+			Id:            id,
+			Title:         title,
+			TitleEnglish:  titleEnglish,
+			TitleJapanese: titleJapanese,
+			Image:         image,
+			Description:   description,
+			Genres:        genres,
+			Score:         score,
+			Status:        animeStatus,
+			Type:          animeType,
+			TotalEpisodes: totalEpisodes,
+		})
 	}
 	return resp, nil
 }
@@ -175,6 +253,9 @@ WHERE id=$1
 		episodeIDs = append(episodeIDs, episodeID.String())
 	}
 
+	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
+		return nil, status.Error(codes.Internal, "db outbox")
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, status.Error(codes.Internal, "db commit")
 	}
@@ -212,29 +293,29 @@ func (s *CatalogService) UpsertJikanAnime(ctx context.Context, req *catalogv1.Up
 		animeID = uuid.New()
 		qIns := `
 INSERT INTO anime (id, title, title_english, title_japanese, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, score, created_at, updated_at)
-VALUES ($1,$2,$3,$4,'',$5,$6,$7,'unknown',$8,$9,'',$10,$11,$12,$13)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'unknown',$9,$10,'',$11,$12,$13,$14)
 `
 		_, err = tx.Exec(ctx, qIns,
 			animeID,
 			anime.GetTitle(),
 			anime.GetTitleEnglish(),
 			anime.GetTitleJapanese(),
+			"",
 			anime.GetImage(),
 			anime.GetSynopsis(),
 			genresJSON,
 			anime.GetType(),
 			anime.GetStatus(),
 			anime.GetEpisodes(),
-			anime.GetEpisodes(),
 			anime.GetScore(),
 			now, now,
 		)
 		if err != nil {
-			return nil, status.Error(codes.Internal, "db")
+			return nil, status.Error(codes.Internal, "db: "+err.Error())
 		}
 		qMap := `INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ($1,$2,$3)`
 		if _, err := tx.Exec(ctx, qMap, provider, externalID, animeID); err != nil {
-			return nil, status.Error(codes.Internal, "db")
+			return nil, status.Error(codes.Internal, "db: "+err.Error())
 		}
 	} else {
 		qUpd := `
@@ -260,6 +341,9 @@ WHERE id=$1
 		}
 	}
 
+	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
+		return nil, status.Error(codes.Internal, "db outbox")
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, status.Error(codes.Internal, "db commit")
 	}
@@ -397,6 +481,9 @@ WHERE id=$1
 		episodeIDs = append(episodeIDs, episodeID.String())
 	}
 
+	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
+		return nil, status.Error(codes.Internal, "db outbox")
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, status.Error(codes.Internal, "db commit")
 	}

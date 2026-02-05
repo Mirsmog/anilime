@@ -11,6 +11,9 @@ type BFFConfig struct {
 	AuthGRPCAddr     string
 	CatalogGRPCAddr  string
 	ActivityGRPCAddr string
+	SearchGRPCAddr   string
+	NATSURL          string
+	JikanBaseURL     string
 }
 
 func LoadBFF() (BFFConfig, error) {
@@ -30,5 +33,19 @@ func LoadBFF() (BFFConfig, error) {
 	if activityAddr == "" {
 		return BFFConfig{}, errors.New("ACTIVITY_GRPC_ADDR is required")
 	}
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr}, nil
+	searchAddr := strings.TrimSpace(os.Getenv("SEARCH_GRPC_ADDR"))
+	if searchAddr == "" {
+		return BFFConfig{}, errors.New("SEARCH_GRPC_ADDR is required")
+	}
+
+	natsURL := strings.TrimSpace(os.Getenv("NATS_URL"))
+	if natsURL == "" {
+		natsURL = "nats://nats:4222"
+	}
+	jikanURL := strings.TrimSpace(os.Getenv("JIKAN_BASE_URL"))
+	if jikanURL == "" {
+		jikanURL = "https://api.jikan.moe/v4"
+	}
+
+	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
 }
