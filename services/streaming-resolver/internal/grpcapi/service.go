@@ -56,6 +56,7 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("providerEpisodeID", providerEpisodeID)
 	servers, err := s.HiAnime.GetServers(ctx, providerEpisodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "provider servers: %v", err)
@@ -63,16 +64,7 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 	if servers.Status != 200 {
 		return nil, status.Errorf(codes.Unavailable, "provider servers: status %d", servers.Status)
 	}
-	if server == "" {
-		switch {
-		case len(servers.Data.Sub) > 0:
-			server = fmt.Sprintf("%d", servers.Data.Sub[0].ServerID)
-		case len(servers.Data.Dub) > 0:
-			server = fmt.Sprintf("%d", servers.Data.Dub[0].ServerID)
-		case len(servers.Data.Raw) > 0:
-			server = fmt.Sprintf("%d", servers.Data.Raw[0].ServerID)
-		}
-	}
+	server = selectServer(server, servers)
 	if server == "" {
 		return nil, status.Error(codes.NotFound, "server not found")
 	}
@@ -85,18 +77,18 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 		return nil, status.Errorf(codes.Unavailable, "provider sources: status %d", sources.Status)
 	}
 
-	out := &cachedPlayback{ProviderEpisodeID: providerEpisodeID, Headers: sources.Data.Episode.Headers}
-	for _, src := range sources.Data.Episode.Sources {
+	out := &cachedPlayback{ProviderEpisodeID: providerEpisodeID, Headers: sources.Data.Headers}
+	for _, src := range sources.Data.Sources {
 		out.Sources = append(out.Sources, streamingv1.PlaybackSource{Url: src.URL, Quality: src.Type, IsM3U8: src.IsM3U8})
 	}
-	for _, tr := range sources.Data.Episode.Tracks {
-		out.Tracks = append(out.Tracks, streamingv1.PlaybackTrack{Kind: tr.Kind, File: tr.File, Label: tr.Label, Language: tr.Lang, IsDefault: tr.Default})
+	for _, tr := range sources.Data.Tracks {
+		out.Tracks = append(out.Tracks, streamingv1.PlaybackTrack{Kind: "thumbnails", File: tr.URL, Label: tr.Lang, Language: tr.Lang, IsDefault: false})
 	}
-	if sources.Data.Episode.Intro.End > 0 {
-		out.Intro = &streamingv1.PlaybackIntroOutro{Start: sources.Data.Episode.Intro.Start, End: sources.Data.Episode.Intro.End}
+	if sources.Data.Intro.End > 0 {
+		out.Intro = &streamingv1.PlaybackIntroOutro{Start: sources.Data.Intro.Start, End: sources.Data.Intro.End}
 	}
-	if sources.Data.Episode.Outro.End > 0 {
-		out.Outro = &streamingv1.PlaybackIntroOutro{Start: sources.Data.Episode.Outro.Start, End: sources.Data.Episode.Outro.End}
+	if sources.Data.Outro.End > 0 {
+		out.Outro = &streamingv1.PlaybackIntroOutro{Start: sources.Data.Outro.Start, End: sources.Data.Outro.End}
 	}
 
 	if s.Cache != nil {
@@ -130,4 +122,21 @@ func toResponse(c *cachedPlayback) *streamingv1.GetPlaybackResponse {
 	resp.Intro = c.Intro
 	resp.Outro = c.Outro
 	return resp
+}
+
+func selectServer(requested string, servers *hianime.ServersResponse) string {
+	requested = strings.TrimSpace(strings.ToLower(requested))
+	if requested == "" {
+		if len(servers.Data.Sub) > 0 {
+			return servers.Data.Sub[0].ServerName
+		}
+		if len(servers.Data.Dub) > 0 {
+			return servers.Data.Dub[0].ServerName
+		}
+		if len(servers.Data.Raw) > 0 {
+			return servers.Data.Raw[0].ServerName
+		}
+		return ""
+	}
+	return requested
 }

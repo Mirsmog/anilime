@@ -82,7 +82,7 @@ func (s *CatalogService) GetProviderEpisodeID(ctx context.Context, req *catalogv
 	}
 
 	var providerEpisodeID string
-	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id::text = $1 AND provider = $2 ORDER BY provider_episode_id DESC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
+	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id::text = $1 AND provider = $2 ORDER BY provider_episode_id ASC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, status.Error(codes.NotFound, "provider episode not found")

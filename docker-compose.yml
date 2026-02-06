@@ -70,6 +70,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       HIANIME_BASE_URL: https://void-roan-six.vercel.app/api/v2
       CACHE_TTL: 20m
+      HIANIME_DEBUG: "true"
     ports:
       - "9095:9095"
     depends_on:
