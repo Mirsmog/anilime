@@ -7,6 +7,7 @@ package idempotency
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -19,12 +20,17 @@ type Store interface {
 
 // NewStore creates the best available idempotency store:
 // Redis > Postgres > in-memory (dev fallback).
-func NewStore(redisDSN, databaseURL string, ttl time.Duration) Store {
+// When isProd is true, in-memory fallback is not allowed and the function
+// returns nil with an error.
+func NewStore(redisDSN, databaseURL string, ttl time.Duration, isProd bool) (Store, error) {
 	if redisDSN != "" {
-		return newRedisStore(redisDSN, ttl)
+		return newRedisStore(redisDSN, ttl), nil
 	}
 	if databaseURL != "" {
-		return newPostgresStore(databaseURL, ttl)
+		return newPostgresStore(databaseURL, ttl), nil
 	}
-	return newMemoryStore()
+	if isProd {
+		return nil, errors.New("production requires REDIS_DSN or DATABASE_URL for idempotency; in-memory store is not allowed")
+	}
+	return newMemoryStore(), nil
 }

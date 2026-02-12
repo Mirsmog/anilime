@@ -47,8 +47,21 @@ func TestMemoryStore_DifferentEventsAreIndependent(t *testing.T) {
 }
 
 func TestNewStore_FallsBackToMemory(t *testing.T) {
-	s := NewStore("", "", 0)
+	s, err := NewStore("", "", 0, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if _, ok := s.(*memoryStore); !ok {
 		t.Fatalf("expected memoryStore when no DSN provided, got %T", s)
+	}
+}
+
+func TestNewStore_RejectsMemoryInProd(t *testing.T) {
+	s, err := NewStore("", "", 0, true)
+	if err == nil {
+		t.Fatalf("expected error in production with no DSN, got store %T", s)
+	}
+	if s != nil {
+		t.Fatalf("expected nil store, got %T", s)
 	}
 }

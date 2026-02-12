@@ -42,7 +42,12 @@ func main() {
 		defer closePool()
 	}
 
-	idem := idempotency.NewStore(billingCfg.RedisDSN, billingCfg.DatabaseURL, billingCfg.IdempotencyTTL)
+	isProd := strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
+	idem, err := idempotency.NewStore(billingCfg.RedisDSN, billingCfg.DatabaseURL, billingCfg.IdempotencyTTL, isProd)
+	if err != nil {
+		log.Error("idempotency store", zap.Error(err))
+		run.Exit(1)
+	}
 	log.Info("idempotency store initialised",
 		zap.Bool("redis", billingCfg.RedisDSN != ""),
 		zap.Bool("postgres", billingCfg.DatabaseURL != ""),
