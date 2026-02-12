@@ -23,8 +23,8 @@ func Open(ctx context.Context) (*pgxpool.Pool, error) {
 	}
 
 	// Safe defaults; can be overridden later.
-	cfg.MaxConns = 10
-	cfg.MinConns = 1
+	cfg.MaxConns = 25
+	cfg.MinConns = 5
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.HealthCheckPeriod = 30 * time.Second
 
