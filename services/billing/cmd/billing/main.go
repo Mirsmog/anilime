@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,17 +37,9 @@ func main() {
 		panic(err)
 	}
 
-	// Optional Postgres pool for billing persistence.
-	var pool *pgxpool.Pool
-	if billingCfg.DatabaseURL != "" {
-		p, err := pgxpool.New(context.Background(), billingCfg.DatabaseURL)
-		if err != nil {
-			log.Warn("postgres unavailable, billing will run without persistence", zap.Error(err))
-		} else {
-			pool = p
-			defer pool.Close()
-			log.Info("postgres connected for billing")
-		}
+	pool, closePool := initPool(log, billingCfg)
+	if closePool != nil {
+		defer closePool()
 	}
 
 	idem := idempotency.NewStore(billingCfg.RedisDSN, billingCfg.DatabaseURL, billingCfg.IdempotencyTTL)
@@ -81,4 +75,46 @@ func main() {
 
 	log.Info("exit", zap.Int("code", code))
 	run.Exit(code)
+}
+
+// initPool initialises the Postgres connection pool for billing.
+// In production (APP_ENV=production) it requires a working connection and
+// terminates the process otherwise.
+func initPool(log *zap.Logger, billingCfg billingconfig.Config) (*pgxpool.Pool, func()) {
+	isProd := strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
+
+	if billingCfg.DatabaseURL == "" {
+		if isProd {
+			log.Error("DATABASE_URL is required in production")
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("DATABASE_URL not set, billing will run without persistence (development only)")
+		return nil, nil
+	}
+
+	pool, err := pgxpool.New(context.Background(), billingCfg.DatabaseURL)
+	if err != nil {
+		if isProd {
+			log.Error("DATABASE_URL is set but Postgres is unreachable in production", zap.Error(err))
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("postgres unavailable, billing will run without persistence", zap.Error(err))
+		return nil, nil
+	}
+
+	if err := pool.Ping(context.Background()); err != nil {
+		pool.Close()
+		if isProd {
+			log.Error("Postgres ping failed in production", zap.Error(err))
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("postgres ping failed, billing will run without persistence", zap.Error(err))
+		return nil, nil
+	}
+
+	log.Info("postgres connected for billing")
+	return pool, pool.Close
 }

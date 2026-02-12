@@ -100,6 +100,17 @@ func initRatings(log *zap.Logger) (store.RatingStore, func()) {
 		return store.NewInMemoryRatingStore(), nil
 	}
 
+	if err := pool.Ping(context.Background()); err != nil {
+		pool.Close()
+		if isProd {
+			log.Error("postgres ping failed in production", zap.Error(err))
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("postgres ping failed, falling back to in-memory store", zap.Error(err))
+		return store.NewInMemoryRatingStore(), nil
+	}
+
 	log.Info("ratings store: postgres")
 	return store.NewPostgresRatingStore(pool), pool.Close
 }
@@ -127,6 +138,17 @@ func initComments(log *zap.Logger) (store.CommentStore, func()) {
 			os.Exit(1)
 		}
 		log.Warn("postgres unavailable, falling back to in-memory comment store", zap.Error(err))
+		return store.NewInMemoryCommentStore(), nil
+	}
+
+	if err := pool.Ping(context.Background()); err != nil {
+		pool.Close()
+		if isProd {
+			log.Error("postgres ping failed in production", zap.Error(err))
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("postgres ping failed, falling back to in-memory comment store", zap.Error(err))
 		return store.NewInMemoryCommentStore(), nil
 	}
 
