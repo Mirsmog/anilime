@@ -198,7 +198,7 @@ func doJSON[T any](ctx context.Context, c *Client, u string) (*T, error) {
 		return nil, fmt.Errorf("hianime: status %d body=%q", resp.StatusCode, string(b[:min(len(b), 200)]))
 	}
 	if os.Getenv("HIANIME_DEBUG") == "true" {
-		fmt.Println("hianime raw", string(b[:min(len(b), 1000)]))
+		c.Log.Debug("hianime raw response", zap.String("body", string(b[:min(len(b), 1000)])))
 	}
 	var out T
 	if err := json.Unmarshal(b, &out); err != nil {

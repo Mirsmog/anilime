@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -19,6 +20,7 @@ type ResolverService struct {
 	Catalog catalogv1.CatalogServiceClient
 	HiAnime *hianime.Client
 	Cache   *cache.RedisCache
+	Log     *zap.Logger
 }
 
 type cachedPlayback struct {
@@ -56,7 +58,9 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("providerEpisodeID", providerEpisodeID)
+	if s.Log != nil {
+		s.Log.Debug("resolved provider episode", zap.String("providerEpisodeID", providerEpisodeID))
+	}
 	servers, err := s.HiAnime.GetServers(ctx, providerEpisodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "provider servers: %v", err)

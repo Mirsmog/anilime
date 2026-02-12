@@ -74,7 +74,7 @@ func main() {
 		RetryBaseDelay: cfg.RetryBaseDelay,
 	}, hianime.WithCircuitBreaker(cb), hianime.WithLogger(log))
 
-	resolver := &grpcapi.ResolverService{Catalog: catalogClient, HiAnime: hiAnimeClient, Cache: cacheClient}
+	resolver := &grpcapi.ResolverService{Catalog: catalogClient, HiAnime: hiAnimeClient, Cache: cacheClient, Log: log}
 	grpcSrv := grpc.NewServer()
 	streamingv1.RegisterStreamingResolverServiceServer(grpcSrv, resolver)
 	reflection.Register(grpcSrv)
