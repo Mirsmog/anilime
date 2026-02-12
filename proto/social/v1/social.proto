@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package social.v1;
+
+option go_package = "github.com/example/anime-platform/gen/social/v1;socialv1";
+
+import "google/protobuf/timestamp.proto";
+
+message Comment {
+  string id = 1;
+  string anime_id = 2;
+  string user_id = 3;
+  optional string parent_id = 4;
+  string body = 5;
+  int32 score = 6;
+  google.protobuf.Timestamp created_at = 7;
+  optional google.protobuf.Timestamp updated_at = 8;
+  optional google.protobuf.Timestamp deleted_at = 9;
+}
+
+message CommentTreeNode {
+  Comment comment = 1;
+  repeated Comment replies = 2;
+}
+
+// CreateComment
+
+message CreateCommentRequest {
+  string anime_id = 1;
+  string body = 2;
+  optional string parent_id = 3;
+  // user_id is extracted from metadata on the server side.
+}
+
+message CreateCommentResponse {
+  Comment comment = 1;
+}
+
+// ListComments
+
+message ListCommentsRequest {
+  string anime_id = 1;
+  string sort = 2;    // "new" or "top"
+  int32 limit = 3;
+  string cursor = 4;
+}
+
+message ListCommentsResponse {
+  repeated CommentTreeNode comments = 1;
+  string next_cursor = 2;
+}
+
+// VoteComment
+
+message VoteCommentRequest {
+  string comment_id = 1;
+  int32 vote = 2; // 1 or -1
+  // user_id is extracted from metadata on the server side.
+}
+
+message VoteCommentResponse {}
+
+// UpdateComment
+
+message UpdateCommentRequest {
+  string comment_id = 1;
+  string body = 2;
+  // user_id is extracted from metadata on the server side.
+}
+
+message UpdateCommentResponse {}
+
+// DeleteComment
+
+message DeleteCommentRequest {
+  string comment_id = 1;
+  // user_id is extracted from metadata on the server side.
+}
+
+message DeleteCommentResponse {}
+
+service SocialService {
+  rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+  rpc VoteComment(VoteCommentRequest) returns (VoteCommentResponse);
+  rpc UpdateComment(UpdateCommentRequest) returns (UpdateCommentResponse);
+  rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentResponse);
+}
