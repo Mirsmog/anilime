@@ -97,6 +97,43 @@ func upsertEpisodes(ctx context.Context, tx pgx.Tx, provider string, animeID uui
 	return episodeIDs, nil
 }
 
+func (s *CatalogService) GetEpisodesByAnimeID(ctx context.Context, req *catalogv1.GetEpisodesByAnimeIDRequest) (*catalogv1.GetEpisodesByAnimeIDResponse, error) {
+	animeID := strings.TrimSpace(req.GetAnimeId())
+	if animeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "anime_id is required")
+	}
+
+	q := `
+SELECT id::text, anime_id::text, number, title, aired_at
+FROM episodes
+WHERE anime_id::text = $1
+ORDER BY number ASC
+`
+	rows, err := s.DB.Query(ctx, q, animeID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "db query")
+	}
+	defer rows.Close()
+
+	resp := &catalogv1.GetEpisodesByAnimeIDResponse{}
+	for rows.Next() {
+		var (
+			id, aID, title string
+			number         int32
+			airedAt        *time.Time
+		)
+		if err := rows.Scan(&id, &aID, &number, &title, &airedAt); err != nil {
+			return nil, status.Error(codes.Internal, "db scan")
+		}
+		pb := &catalogv1.Episode{Id: id, AnimeId: aID, Number: number, Title: title}
+		if airedAt != nil {
+			pb.AiredAtRfc3339 = airedAt.UTC().Format(time.RFC3339)
+		}
+		resp.Episodes = append(resp.Episodes, pb)
+	}
+	return resp, nil
+}
+
 func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.GetEpisodesByIDsRequest) (*catalogv1.GetEpisodesByIDsResponse, error) {
 	ids := req.GetEpisodeIds()
 	if len(ids) == 0 {

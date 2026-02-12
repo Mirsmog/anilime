@@ -137,6 +137,14 @@ message JikanAnime {
   float score = 11;
 }
 
+message GetEpisodesByAnimeIDRequest {
+  string anime_id = 1;
+}
+
+message GetEpisodesByAnimeIDResponse {
+  repeated Episode episodes = 1;
+}
+
 message UpsertJikanAnimeRequest {
   JikanAnime anime = 1;
 }
@@ -150,6 +158,7 @@ service CatalogService {
   rpc GetProviderEpisodeID(GetProviderEpisodeIDRequest) returns (GetProviderEpisodeIDResponse);
   rpc GetAnimeByIDs(GetAnimeByIDsRequest) returns (GetAnimeByIDsResponse);
   rpc GetAnimeIDs(GetAnimeIDsRequest) returns (GetAnimeIDsResponse);
+  rpc GetEpisodesByAnimeID(GetEpisodesByAnimeIDRequest) returns (GetEpisodesByAnimeIDResponse);
   rpc UpsertAnimeKaiAnime(UpsertAnimeKaiAnimeRequest) returns (UpsertAnimeKaiAnimeResponse);
   rpc AttachExternalAnimeID(AttachExternalAnimeIDRequest) returns (AttachExternalAnimeIDResponse);
   rpc ResolveAnimeIDByExternalID(ResolveAnimeIDByExternalIDRequest) returns (ResolveAnimeIDByExternalIDResponse);
