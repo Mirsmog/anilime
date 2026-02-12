@@ -6,22 +6,65 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/sony/gobreaker"
+	"go.uber.org/zap"
 )
+
+// ClientConfig holds configurable settings for the HiAnime client.
+type ClientConfig struct {
+	UserAgent      string
+	MaxRetries     int
+	RetryBaseDelay time.Duration
+}
 
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	Config     ClientConfig
+	CB         *gobreaker.CircuitBreaker
+	Log        *zap.Logger
 }
 
-func New(baseURL string) *Client {
+// Option configures the Client.
+type Option func(*Client)
+
+func WithCircuitBreaker(cb *gobreaker.CircuitBreaker) Option {
+	return func(c *Client) { c.CB = cb }
+}
+
+func WithLogger(log *zap.Logger) Option {
+	return func(c *Client) { c.Log = log }
+}
+
+func New(baseURL string, cfg ClientConfig, opts ...Option) *Client {
 	if baseURL == "" {
 		baseURL = "https://void-roan-six.vercel.app/api/v2"
 	}
-	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), HTTPClient: &http.Client{Timeout: 10 * time.Second}}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"
+	}
+	if cfg.MaxRetries <= 0 {
+		cfg.MaxRetries = 3
+	}
+	if cfg.RetryBaseDelay <= 0 {
+		cfg.RetryBaseDelay = 500 * time.Millisecond
+	}
+	c := &Client{
+		BaseURL:    strings.TrimRight(baseURL, "/"),
+		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Config:     cfg,
+		Log:        zap.NewNop(),
+	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 type ServersResponse struct {
@@ -70,15 +113,50 @@ type SourcesResponse struct {
 
 func (c *Client) GetServers(ctx context.Context, providerEpisodeID string) (*ServersResponse, error) {
 	endpoint := c.BaseURL + "/hianime/episode/servers?animeEpisodeId=" + providerEpisodeID + "&raw=1"
-	return doJSON[ServersResponse](ctx, c.HTTPClient, endpoint)
+	return doWithBreaker[ServersResponse](ctx, c, endpoint)
 }
 
 func (c *Client) GetSources(ctx context.Context, providerEpisodeID, serverID, category string) (*SourcesResponse, error) {
 	endpoint := c.BaseURL + "/hianime/episode/sources?animeEpisodeId=" + providerEpisodeID + "&server=" + serverID + "&category=" + category
-	return doJSON[SourcesResponse](ctx, c.HTTPClient, endpoint)
+	return doWithBreaker[SourcesResponse](ctx, c, endpoint)
 }
 
-func doJSON[T any](ctx context.Context, hc *http.Client, u string) (*T, error) {
+func doWithBreaker[T any](ctx context.Context, c *Client, u string) (*T, error) {
+	if c.CB == nil {
+		return doJSONWithRetry[T](ctx, c, u)
+	}
+	result, err := c.CB.Execute(func() (interface{}, error) {
+		return doJSONWithRetry[T](ctx, c, u)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.(*T), nil
+}
+
+func doJSONWithRetry[T any](ctx context.Context, c *Client, u string) (*T, error) {
+	var lastErr error
+	for attempt := 0; attempt <= c.Config.MaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := c.Config.RetryBaseDelay * time.Duration(math.Pow(2, float64(attempt-1)))
+			c.Log.Debug("retrying request", zap.String("url", u), zap.Int("attempt", attempt), zap.Duration("delay", delay))
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+		result, err := doJSON[T](ctx, c, u)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		c.Log.Warn("request failed", zap.String("url", u), zap.Int("attempt", attempt), zap.Error(err))
+	}
+	return nil, lastErr
+}
+
+func doJSON[T any](ctx context.Context, c *Client, u string) (*T, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -94,9 +172,9 @@ func doJSON[T any](ctx context.Context, hc *http.Client, u string) (*T, error) {
 	req.Header.Set("Sec-Fetch-User", "?1")
 	req.Header.Set("Priority", "u=0, i")
 	req.Header.Set("TE", "trailers")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0")
+	req.Header.Set("User-Agent", c.Config.UserAgent)
 
-	resp, err := hc.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

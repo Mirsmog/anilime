@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/nats-io/nats.go v1.45.0
 	github.com/redis/go-redis/v9 v9.17.3
+	github.com/sony/gobreaker v1.0.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.46.0
 	golang.org/x/tools v0.40.0

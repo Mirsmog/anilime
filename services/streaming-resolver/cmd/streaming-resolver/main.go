@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/sony/gobreaker"
+
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	streamingv1 "github.com/example/anime-platform/gen/streaming/v1"
 	"github.com/example/anime-platform/internal/platform/logging"
@@ -53,7 +55,26 @@ func main() {
 		run.Exit(1)
 	}
 
-	resolver := &grpcapi.ResolverService{Catalog: catalogClient, HiAnime: hianime.New(cfg.HiAnimeBaseURL), Cache: cacheClient}
+	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "hianime",
+		MaxRequests: cfg.CBMaxRequests,
+		Interval:    cfg.CBInterval,
+		Timeout:     cfg.CBTimeout,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			return counts.ConsecutiveFailures >= cfg.CBFailureThreshold
+		},
+		OnStateChange: func(name string, from, to gobreaker.State) {
+			log.Info("circuit-breaker state change", zap.String("name", name), zap.String("from", from.String()), zap.String("to", to.String()))
+		},
+	})
+
+	hiAnimeClient := hianime.New(cfg.HiAnimeBaseURL, hianime.ClientConfig{
+		UserAgent:      cfg.HiAnimeUserAgent,
+		MaxRetries:     cfg.MaxRetries,
+		RetryBaseDelay: cfg.RetryBaseDelay,
+	}, hianime.WithCircuitBreaker(cb), hianime.WithLogger(log))
+
+	resolver := &grpcapi.ResolverService{Catalog: catalogClient, HiAnime: hiAnimeClient, Cache: cacheClient}
 	grpcSrv := grpc.NewServer()
 	streamingv1.RegisterStreamingResolverServiceServer(grpcSrv, resolver)
 	reflection.Register(grpcSrv)
