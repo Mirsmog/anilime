@@ -96,6 +96,11 @@ func parseSignatureHeader(header string) (signatureHeader, error) {
 	return sh, nil
 }
 
+// ComputeSignatureForTest is exported for use in handler tests.
+func ComputeSignatureForTest(timestamp int64, payload []byte, secret string) string {
+	return computeSignature(timestamp, payload, secret)
+}
+
 func computeSignature(timestamp int64, payload []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	fmt.Fprintf(mac, "%d", timestamp)

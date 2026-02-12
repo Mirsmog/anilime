@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"sync"
 
 	"go.uber.org/zap"
 
 	"github.com/example/anime-platform/internal/platform/api"
+	"github.com/example/anime-platform/services/billing/internal/idempotency"
 	"github.com/example/anime-platform/services/billing/internal/stripe"
 )
 
@@ -25,19 +25,16 @@ type stripeEvent struct {
 
 // WebhookHandler handles Stripe webhook POST requests.
 type WebhookHandler struct {
-	Secret string
-	Log    *zap.Logger
-	// processedEvents stores event IDs for idempotency.
-	// TODO: replace with persistent store (Redis/DB) for production.
-	mu              sync.Mutex
-	processedEvents map[string]struct{}
+	secret     string
+	log        *zap.Logger
+	idempotent idempotency.Store
 }
 
-func NewWebhookHandler(secret string, log *zap.Logger) *WebhookHandler {
+func NewWebhookHandler(secret string, log *zap.Logger, idem idempotency.Store) *WebhookHandler {
 	return &WebhookHandler{
-		Secret:          secret,
-		Log:             log,
-		processedEvents: make(map[string]struct{}),
+		secret:     secret,
+		log:        log,
+		idempotent: idem,
 	}
 }
 
@@ -48,16 +45,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify signature if secret is configured
-	if h.Secret != "" {
-		sigHeader := r.Header.Get("Stripe-Signature")
-		if err := stripe.ConstructEvent(body, sigHeader, h.Secret); err != nil {
-			h.Log.Warn("stripe signature verification failed", zap.Error(err))
-			api.BadRequest(w, "INVALID_SIGNATURE", "webhook signature verification failed", "", nil)
-			return
-		}
-	} else {
-		h.Log.Warn("STRIPE_WEBHOOK_SECRET not set, skipping signature verification")
+	// Signature is always verified — STRIPE_WEBHOOK_SECRET is required at startup.
+	sigHeader := r.Header.Get("Stripe-Signature")
+	if err := stripe.ConstructEvent(body, sigHeader, h.secret); err != nil {
+		h.log.Warn("stripe signature verification failed", zap.Error(err))
+		api.BadRequest(w, "INVALID_SIGNATURE", "webhook signature verification failed", "", nil)
+		return
 	}
 
 	var event stripeEvent
@@ -71,42 +64,42 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Idempotency check
-	h.mu.Lock()
-	if _, seen := h.processedEvents[event.ID]; seen {
-		h.mu.Unlock()
-		h.Log.Debug("duplicate event, skipping", zap.String("event_id", event.ID))
+	// Idempotency check via Redis SETNX / Postgres fallback / in-memory.
+	dup, err := h.idempotent.Check(r.Context(), event.ID)
+	if err != nil {
+		h.log.Error("idempotency check failed", zap.Error(err))
+		api.Internal(w, "")
+		return
+	}
+	if dup {
+		h.log.Debug("duplicate event, skipping", zap.String("event_id", event.ID))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	h.processedEvents[event.ID] = struct{}{}
-	h.mu.Unlock()
 
-	// Handle specific event types
+	// Handle specific event types.
 	switch event.Type {
 	case "checkout.session.completed":
 		h.handleCheckoutCompleted(event)
 	case "invoice.paid":
 		h.handleInvoicePaid(event)
 	default:
-		h.Log.Debug("unhandled event type", zap.String("type", event.Type), zap.String("event_id", event.ID))
+		h.log.Debug("unhandled event type", zap.String("type", event.Type), zap.String("event_id", event.ID))
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func (h *WebhookHandler) handleCheckoutCompleted(event stripeEvent) {
-	h.Log.Info("checkout.session.completed",
+	h.log.Info("checkout.session.completed",
 		zap.String("event_id", event.ID),
 	)
-	// TODO: publish NATS event billing.checkout.completed
-	// TODO: update user subscription status in DB
+	// TODO: persist payment and publish NATS event (next commit).
 }
 
 func (h *WebhookHandler) handleInvoicePaid(event stripeEvent) {
-	h.Log.Info("invoice.paid",
+	h.log.Info("invoice.paid",
 		zap.String("event_id", event.ID),
 	)
-	// TODO: publish NATS event billing.invoice.paid
-	// TODO: extend user subscription period in DB
+	// TODO: persist subscription and publish NATS event (next commit).
 }

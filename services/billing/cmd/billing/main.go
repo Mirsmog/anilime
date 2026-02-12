@@ -12,6 +12,7 @@ import (
 	"github.com/example/anime-platform/internal/platform/run"
 	billingconfig "github.com/example/anime-platform/services/billing/internal/config"
 	"github.com/example/anime-platform/services/billing/internal/handlers"
+	"github.com/example/anime-platform/services/billing/internal/idempotency"
 )
 
 func main() {
@@ -25,9 +26,19 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
-	billingCfg := billingconfig.Load()
+	billingCfg, err := billingconfig.Load()
+	if err != nil {
+		log.Error("billing config", zap.Error(err))
+		panic(err)
+	}
 
-	webhookHandler := handlers.NewWebhookHandler(billingCfg.StripeWebhookSecret, log)
+	idem := idempotency.NewStore(billingCfg.RedisDSN, billingCfg.DatabaseURL, billingCfg.IdempotencyTTL)
+	log.Info("idempotency store initialised",
+		zap.Bool("redis", billingCfg.RedisDSN != ""),
+		zap.Bool("postgres", billingCfg.DatabaseURL != ""),
+	)
+
+	webhookHandler := handlers.NewWebhookHandler(billingCfg.StripeWebhookSecret, log, idem)
 
 	r := chi.NewRouter()
 	httpserver.SetupRouter(r)
