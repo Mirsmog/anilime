@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -121,12 +123,13 @@ func ContinueWatching(activity activityv1.ActivityServiceClient, catalog catalog
 
 		meta := map[string]*catalogv1.Episode{}
 		if len(epIDs) > 0 {
-			resp, err := catalog.GetEpisodesByIDs(ctx, &catalogv1.GetEpisodesByIDsRequest{EpisodeIds: epIDs})
+			// fetch episodes in parallel in chunks to reduce tail latency
+			episodes, err := fetchEpisodesConcurrently(ctx, catalog, epIDs, 20)
 			if err != nil {
 				writeGRPCError(w, rid, err)
 				return
 			}
-			for _, e := range resp.GetEpisodes() {
+			for _, e := range episodes {
 				meta[e.GetId()] = e
 			}
 		}
@@ -154,4 +157,46 @@ func ContinueWatching(activity activityv1.ActivityServiceClient, catalog catalog
 
 		api.WriteJSON(w, http.StatusOK, out)
 	}
+}
+
+// fetchEpisodesConcurrently splits ids into chunks and fetches them in parallel.
+func fetchEpisodesConcurrently(ctx context.Context, catalog catalogv1.CatalogServiceClient, ids []string, chunkSize int) ([]*catalogv1.Episode, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if chunkSize <= 0 {
+		chunkSize = 20
+	}
+	tasks := (len(ids) + chunkSize - 1) / chunkSize
+	ch := make(chan []*catalogv1.Episode, tasks)
+	errCh := make(chan error, tasks)
+	var wg sync.WaitGroup
+	for i := 0; i < len(ids); i += chunkSize {
+		end := i + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[i:end]
+		wg.Add(1)
+		go func(cids []string) {
+			defer wg.Done()
+			r, err := catalog.GetEpisodesByIDs(ctx, &catalogv1.GetEpisodesByIDsRequest{EpisodeIds: cids})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			ch <- r.GetEpisodes()
+		}(chunk)
+	}
+	wg.Wait()
+	close(ch)
+	close(errCh)
+	if len(errCh) > 0 {
+		return nil, <-errCh
+	}
+	out := make([]*catalogv1.Episode, 0)
+	for eps := range ch {
+		out = append(out, eps...)
+	}
+	return out, nil
 }
