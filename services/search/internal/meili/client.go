@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -22,7 +23,7 @@ type SearchResponse struct {
 }
 
 func New(baseURL, apiKey string) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, http: &http.Client{}}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, http: &http.Client{Timeout: 5 * time.Second}}
 }
 
 func (c *Client) EnsureIndex(ctx context.Context, index string, primaryKey string) error {
