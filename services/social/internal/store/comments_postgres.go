@@ -41,7 +41,7 @@ func (s *PostgresCommentStore) GetThread(ctx context.Context, animeID, sort stri
 	var roots []Comment
 	var err error
 	switch sort {
-	case "top":
+	case SortTop:
 		roots, err = s.queryRootsTop(ctx, animeID, limit+1, cursor)
 	default: // "new"
 		roots, err = s.queryRootsNew(ctx, animeID, limit+1, cursor)
@@ -55,7 +55,7 @@ func (s *PostgresCommentStore) GetThread(ctx context.Context, animeID, sort stri
 		last := roots[limit-1]
 		roots = roots[:limit]
 		switch sort {
-		case "top":
+		case SortTop:
 			nextCursor = encodeTopCursor(last.Score, last.CreatedAt, last.ID)
 		default:
 			nextCursor = encodeNewCursor(last.CreatedAt, last.ID)

@@ -24,6 +24,9 @@ type CommentTreeNode struct {
 	Replies []Comment `json:"replies"`
 }
 
+// SortTop is the sort parameter for top-scored comments.
+const SortTop = "top"
+
 // CommentStore defines the contract for comment persistence.
 type CommentStore interface {
 	Create(ctx context.Context, c Comment) (Comment, error)

@@ -17,6 +17,11 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 	return v, ok
 }
 
+// WithUserID injects user_id into context. Useful for testing.
+func WithUserID(ctx context.Context, uid string) context.Context {
+	return context.WithValue(ctx, ctxKeyUserID{}, uid)
+}
+
 func RoleFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyRole{}).(string)
 	return v, ok
