@@ -166,6 +166,12 @@ func main() {
 	// Public comment listing (no auth required)
 	r.Get("/v1/comments/{anime_id}", bffhandlers.ListComments(socialc.Client))
 
+	// Public catalog endpoints (no auth required)
+	r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client))
+	r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client))
+	r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
+	r.Get("/v1/episodes/{episode_id}", bffhandlers.GetEpisode(catalogc.Client))
+
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
 
 	runner := run.New(log)
