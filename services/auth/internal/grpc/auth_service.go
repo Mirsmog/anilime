@@ -183,7 +183,11 @@ func (s *AuthService) Me(ctx context.Context, _ *authv1.MeRequest) (*authv1.MeRe
 	if strings.TrimSpace(claims.Subject) == "" {
 		return nil, errUnauthenticated("AUTH_INVALID", "Invalid token")
 	}
-	return &authv1.MeResponse{UserId: claims.Subject}, nil
+	u, err := s.Store.GetUserByID(ctx, claims.Subject)
+	if err != nil {
+		return &authv1.MeResponse{UserId: claims.Subject}, nil
+	}
+	return &authv1.MeResponse{UserId: u.ID, Email: u.Email, Username: u.Username}, nil
 }
 
 func (s *AuthService) issueTokens(ctx context.Context, u domain.User, ip net.IP, userAgent string) (*authv1.RegisterResponse, error) {

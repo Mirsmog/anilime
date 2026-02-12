@@ -6,7 +6,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 
+	authv1 "github.com/example/anime-platform/gen/auth/v1"
 	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/config"
@@ -20,6 +22,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	bffhandlers "github.com/example/anime-platform/services/bff/internal/handlers"
+	bffhttp "github.com/example/anime-platform/services/bff/internal/http"
 )
 
 func main() {
@@ -96,11 +99,15 @@ func main() {
 		_, _ = w.Write([]byte("anime-platform bff"))
 	})
 
-	// Auth endpoints (REST -> gRPC)
-	r.Post("/v1/auth/register", bffhandlers.Register(authc.Client))
-	r.Post("/v1/auth/login", bffhandlers.Login(authc.Client))
-	r.Post("/v1/auth/refresh", bffhandlers.Refresh(authc.Client))
-	r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
+	// Auth endpoints with rate limiting (5 req/s, burst 10)
+	authLimiter := bffhttp.NewRateLimiter(5, 10)
+	r.Group(func(r chi.Router) {
+		r.Use(authLimiter.Middleware)
+		r.Post("/v1/auth/register", bffhandlers.Register(authc.Client))
+		r.Post("/v1/auth/login", bffhandlers.Login(authc.Client))
+		r.Post("/v1/auth/refresh", bffhandlers.Refresh(authc.Client))
+		r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
+	})
 
 	r.Get("/v1/search", bffhandlers.Search(searchc.Client))
 
@@ -120,7 +127,25 @@ func main() {
 
 		r.Get("/v1/me", func(w http.ResponseWriter, r *http.Request) {
 			uid, _ := auth.UserIDFromContext(r.Context())
-			api.WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid})
+			resp := map[string]any{"user_id": uid}
+
+			// Enrich with email/username from auth service
+			authzHeader := r.Header.Get("Authorization")
+			if authzHeader != "" {
+				md := metadata.New(map[string]string{"authorization": authzHeader})
+				ctx := metadata.NewOutgoingContext(r.Context(), md)
+				me, err := authc.Client.Me(ctx, &authv1.MeRequest{})
+				if err == nil {
+					if me.GetEmail() != "" {
+						resp["email"] = me.GetEmail()
+					}
+					if me.GetUsername() != "" {
+						resp["username"] = me.GetUsername()
+					}
+				}
+			}
+
+			api.WriteJSON(w, http.StatusOK, resp)
 		})
 
 		r.Post("/v1/activity/progress", bffhandlers.UpsertProgress(activityc.Client))
