@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -11,6 +10,8 @@ import (
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
+	"github.com/example/anime-platform/services/social/internal/handlers"
+	"github.com/example/anime-platform/services/social/internal/store"
 )
 
 func main() {
@@ -24,12 +25,12 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
+	ratings := store.NewRatingStore()
+
 	r := chi.NewRouter()
 	httpserver.SetupRouter(r)
-	r.Get("/v1/ratings/{anime_id}", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{}"))
-	})
+	r.Get("/v1/ratings/{anime_id}", handlers.GetRatings(ratings))
+	r.Post("/v1/ratings/{anime_id}", handlers.PostRating(ratings))
 
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
 
