@@ -104,9 +104,9 @@ func (s *CatalogService) GetEpisodesByAnimeID(ctx context.Context, req *catalogv
 	}
 
 	q := `
-SELECT id::text, anime_id::text, number, title, aired_at
+SELECT id, anime_id, number, title, aired_at
 FROM episodes
-WHERE anime_id::text = $1
+WHERE anime_id = $1::uuid
 ORDER BY number ASC
 `
 	rows, err := s.DB.Query(ctx, q, animeID)
@@ -141,9 +141,9 @@ func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.Ge
 	}
 
 	q := `
-SELECT id::text, anime_id::text, number, title, aired_at
+SELECT id, anime_id, number, title, aired_at
 FROM episodes
-WHERE id::text = ANY($1)
+WHERE id = ANY($1::uuid[])
 `
 
 	rows, err := s.DB.Query(ctx, q, ids)
@@ -179,7 +179,7 @@ func (s *CatalogService) GetProviderEpisodeID(ctx context.Context, req *catalogv
 	}
 
 	var providerEpisodeID string
-	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id::text = $1 AND provider = $2 ORDER BY provider_episode_id ASC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
+	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id = $1::uuid AND provider = $2 ORDER BY provider_episode_id ASC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, status.Error(codes.NotFound, "provider episode not found")
@@ -190,7 +190,7 @@ func (s *CatalogService) GetProviderEpisodeID(ctx context.Context, req *catalogv
 }
 
 func (s *CatalogService) GetAnimeIDs(ctx context.Context, _ *catalogv1.GetAnimeIDsRequest) (*catalogv1.GetAnimeIDsResponse, error) {
-	rows, err := s.DB.Query(ctx, `SELECT id::text FROM anime ORDER BY updated_at DESC`)
+	rows, err := s.DB.Query(ctx, `SELECT id FROM anime ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "db query")
 	}
@@ -214,9 +214,9 @@ func (s *CatalogService) GetAnimeByIDs(ctx context.Context, req *catalogv1.GetAn
 	}
 
 	q := `
-SELECT id::text, title, title_english, title_japanese, image, description, genres, score, status, type, total_episodes
+SELECT id, title, title_english, title_japanese, image, description, genres, score, status, type, total_episodes
 FROM anime
-WHERE id::text = ANY($1)
+WHERE id = ANY($1::uuid[])
 `
 	rows, err := s.DB.Query(ctx, q, ids)
 	if err != nil {

@@ -98,7 +98,7 @@ func (p *Publisher) flushOnce(ctx context.Context) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx, `
-SELECT id::text, event_type, payload
+SELECT id, event_type, payload
 FROM catalog_outbox
 WHERE published_at IS NULL
 ORDER BY created_at
@@ -133,7 +133,7 @@ FOR UPDATE SKIP LOCKED
 		ids = append(ids, item.ID)
 	}
 
-	if _, err := tx.Exec(ctx, `UPDATE catalog_outbox SET published_at = now() WHERE id::text = ANY($1)`, ids); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE catalog_outbox SET published_at = now() WHERE id = ANY($1::uuid[])`, ids); err != nil {
 		return err
 	}
 

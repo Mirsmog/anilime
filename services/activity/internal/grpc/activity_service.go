@@ -140,7 +140,7 @@ func (s *ActivityService) GetContinueWatching(ctx context.Context, req *activity
 	}
 
 	qBase := `
-SELECT episode_id::text, position_seconds, duration_seconds, completed, client_ts_ms, updated_at
+SELECT episode_id, position_seconds, duration_seconds, completed, client_ts_ms, updated_at
 FROM user_episode_progress
 WHERE user_id=$1
 `

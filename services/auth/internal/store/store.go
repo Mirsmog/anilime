@@ -37,7 +37,7 @@ func (s Store) CreateUser(ctx context.Context, p CreateUserParams) (domain.User,
 	q := `
 INSERT INTO users (id, email, username, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id::text, email, username, role, created_at;
+RETURNING id, email, username, role, created_at;
 `
 	err := s.DB.QueryRow(ctx, q, id, p.Email, p.Username, p.PasswordHash).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.CreatedAt)
 	if err != nil {
@@ -65,7 +65,7 @@ func (s Store) FindUserByLogin(ctx context.Context, login string) (UserRow, erro
 	}
 
 	q := `
-SELECT id::text, email, username, role, password_hash, created_at
+SELECT id, email, username, role, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1) OR lower(username) = lower($1)
 LIMIT 1;
