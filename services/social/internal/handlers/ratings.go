@@ -22,19 +22,23 @@ type getRatingsResponse struct {
 }
 
 // GetRatings returns the rating summary for an anime.
-func GetRatings(s *store.RatingStore) http.HandlerFunc {
+func GetRatings(s store.RatingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		animeID := strings.TrimSpace(chi.URLParam(r, "anime_id"))
 		if animeID == "" {
 			api.BadRequest(w, "MISSING_ID", "anime_id is required", "", nil)
 			return
 		}
-		summary := s.GetSummary(animeID)
+		summary, err := s.GetSummary(r.Context(), animeID)
+		if err != nil {
+			api.Internal(w, "")
+			return
+		}
 		resp := getRatingsResponse{RatingSummary: summary}
 
-		// If user_id query param is provided, include their rating
+		// If user_id query param is provided, include their rating.
 		if uid := strings.TrimSpace(r.URL.Query().Get("user_id")); uid != "" {
-			if score, ok := s.GetUserRating(animeID, uid); ok {
+			if score, ok, err := s.GetUserRating(r.Context(), animeID, uid); err == nil && ok {
 				resp.UserScore = &score
 			}
 		}
@@ -43,7 +47,7 @@ func GetRatings(s *store.RatingStore) http.HandlerFunc {
 }
 
 // PostRating upserts a rating for an anime.
-func PostRating(s *store.RatingStore) http.HandlerFunc {
+func PostRating(s store.RatingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		animeID := strings.TrimSpace(chi.URLParam(r, "anime_id"))
 		if animeID == "" {
@@ -65,8 +69,15 @@ func PostRating(s *store.RatingStore) http.HandlerFunc {
 			return
 		}
 
-		s.Upsert(animeID, req.UserID, req.Score)
-		summary := s.GetSummary(animeID)
+		if err := s.Upsert(r.Context(), animeID, req.UserID, req.Score); err != nil {
+			api.Internal(w, "")
+			return
+		}
+		summary, err := s.GetSummary(r.Context(), animeID)
+		if err != nil {
+			api.Internal(w, "")
+			return
+		}
 		api.WriteJSON(w, http.StatusOK, summary)
 	}
 }

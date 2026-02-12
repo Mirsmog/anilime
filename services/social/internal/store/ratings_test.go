@@ -1,23 +1,32 @@
 package store
 
 import (
+	"context"
 	"testing"
 )
 
-func TestRatingStore_UpsertAndSummary(t *testing.T) {
-	s := NewRatingStore()
+func TestInMemoryRatingStore_UpsertAndSummary(t *testing.T) {
+	s := NewInMemoryRatingStore()
+	ctx := context.Background()
 
 	// Empty initially
-	summary := s.GetSummary("anime-1")
+	summary, err := s.GetSummary(ctx, "anime-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if summary.TotalRatings != 0 {
 		t.Fatalf("expected 0 ratings, got %d", summary.TotalRatings)
 	}
 
 	// Add ratings
-	s.Upsert("anime-1", "user-a", 8)
-	s.Upsert("anime-1", "user-b", 6)
+	if err := s.Upsert(ctx, "anime-1", "user-a", 8); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := s.Upsert(ctx, "anime-1", "user-b", 6); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
 
-	summary = s.GetSummary("anime-1")
+	summary, _ = s.GetSummary(ctx, "anime-1")
 	if summary.TotalRatings != 2 {
 		t.Fatalf("expected 2 ratings, got %d", summary.TotalRatings)
 	}
@@ -27,8 +36,8 @@ func TestRatingStore_UpsertAndSummary(t *testing.T) {
 	}
 
 	// Upsert overwrites
-	s.Upsert("anime-1", "user-a", 10)
-	summary = s.GetSummary("anime-1")
+	_ = s.Upsert(ctx, "anime-1", "user-a", 10)
+	summary, _ = s.GetSummary(ctx, "anime-1")
 	if summary.TotalRatings != 2 {
 		t.Fatalf("expected 2 ratings after upsert, got %d", summary.TotalRatings)
 	}
@@ -38,16 +47,23 @@ func TestRatingStore_UpsertAndSummary(t *testing.T) {
 	}
 }
 
-func TestRatingStore_GetUserRating(t *testing.T) {
-	s := NewRatingStore()
+func TestInMemoryRatingStore_GetUserRating(t *testing.T) {
+	s := NewInMemoryRatingStore()
+	ctx := context.Background()
 
-	_, ok := s.GetUserRating("anime-1", "user-a")
+	_, ok, err := s.GetUserRating(ctx, "anime-1", "user-a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if ok {
 		t.Fatal("expected no rating for non-existent user")
 	}
 
-	s.Upsert("anime-1", "user-a", 7)
-	score, ok := s.GetUserRating("anime-1", "user-a")
+	_ = s.Upsert(ctx, "anime-1", "user-a", 7)
+	score, ok, err := s.GetUserRating(ctx, "anime-1", "user-a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected rating to exist")
 	}
@@ -56,14 +72,21 @@ func TestRatingStore_GetUserRating(t *testing.T) {
 	}
 }
 
-func TestRatingStore_MultipleAnime(t *testing.T) {
-	s := NewRatingStore()
-	s.Upsert("anime-1", "user-a", 9)
-	s.Upsert("anime-2", "user-a", 3)
+func TestInMemoryRatingStore_MultipleAnime(t *testing.T) {
+	s := NewInMemoryRatingStore()
+	ctx := context.Background()
+	_ = s.Upsert(ctx, "anime-1", "user-a", 9)
+	_ = s.Upsert(ctx, "anime-2", "user-a", 3)
 
-	s1 := s.GetSummary("anime-1")
-	s2 := s.GetSummary("anime-2")
+	s1, _ := s.GetSummary(ctx, "anime-1")
+	s2, _ := s.GetSummary(ctx, "anime-2")
 	if s1.AverageScore != 9 || s2.AverageScore != 3 {
 		t.Fatalf("expected independent anime scores: got %.1f and %.1f", s1.AverageScore, s2.AverageScore)
 	}
+}
+
+// TestRatingStoreInterface ensures both implementations satisfy the interface.
+func TestRatingStoreInterface(t *testing.T) {
+	var _ RatingStore = (*InMemoryRatingStore)(nil)
+	var _ RatingStore = (*PostgresRatingStore)(nil)
 }

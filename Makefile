@@ -18,6 +18,10 @@ help:
 	@printf "  make migrate-catalog-down - rollback catalog DB migrations (1 step)\n"
 	@printf "  make migrate-activity-up   - apply activity DB migrations\n"
 	@printf "  make migrate-activity-down - rollback activity DB migrations (1 step)\n"
+	@printf "  make migrate-billing-up    - apply billing DB migrations\n"
+	@printf "  make migrate-billing-down  - rollback billing DB migrations (1 step)\n"
+	@printf "  make migrate-social-up     - apply social DB migrations\n"
+	@printf "  make migrate-social-down   - rollback social DB migrations (1 step)\n"
 	@printf "  make proto       - lint + generate protobuf\n"
 	@printf "  make up          - docker compose up --build\n"
 	@printf "  make down        - docker compose down -v\n"
@@ -116,6 +120,30 @@ migrate-activity-down:
 	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
 	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
 	$(MIGRATE) -database "$(DATABASE_URL)" -path services/activity/migrations down 1
+
+.PHONY: migrate-billing-up
+migrate-billing-up:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/billing/migrations up
+
+.PHONY: migrate-billing-down
+migrate-billing-down:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/billing/migrations down 1
+
+.PHONY: migrate-social-up
+migrate-social-up:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/social/migrations up
+
+.PHONY: migrate-social-down
+migrate-social-down:
+	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is required"; exit 1; fi
+	@if [ ! -x "$(MIGRATE)" ]; then echo "migrate not installed: make tools"; exit 1; fi
+	$(MIGRATE) -database "$(DATABASE_URL)" -path services/social/migrations down 1
 
 .PHONY: proto
 proto:

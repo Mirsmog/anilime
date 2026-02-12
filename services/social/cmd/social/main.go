@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"github.com/example/anime-platform/internal/platform/config"
@@ -25,7 +28,10 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
-	ratings := store.NewRatingStore()
+	ratings, closePool := initRatings(log)
+	if closePool != nil {
+		defer closePool()
+	}
 
 	r := chi.NewRouter()
 	httpserver.SetupRouter(r)
@@ -45,4 +51,36 @@ func main() {
 
 	log.Info("exit", zap.Int("code", code))
 	run.Exit(code)
+}
+
+// initRatings selects the RatingStore backend.
+// In production (APP_ENV=production) it requires a working Postgres connection
+// and terminates the process otherwise.
+func initRatings(log *zap.Logger) (store.RatingStore, func()) {
+	isProd := strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
+
+	dsn := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dsn == "" {
+		if isProd {
+			log.Error("DATABASE_URL is required in production")
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("DATABASE_URL not set, using in-memory rating store (development only)")
+		return store.NewInMemoryRatingStore(), nil
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		if isProd {
+			log.Error("postgres is required in production but unavailable", zap.Error(err))
+			_ = log.Sync()
+			os.Exit(1)
+		}
+		log.Warn("postgres unavailable, falling back to in-memory store", zap.Error(err))
+		return store.NewInMemoryRatingStore(), nil
+	}
+
+	log.Info("ratings store: postgres")
+	return store.NewPostgresRatingStore(pool), pool.Close
 }
