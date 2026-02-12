@@ -105,6 +105,7 @@ services:
       ACTIVITY_GRPC_ADDR: activity:9093
       SEARCH_GRPC_ADDR: search:9094
       STREAMING_GRPC_ADDR: streaming-resolver:9095
+      SOCIAL_GRPC_ADDR: social:9096
       HLS_PROXY_BASE_URL: http://hls-proxy:8084
       HLS_SIGNING_SECRET: ${HLS_SIGNING_SECRET}
       NATS_URL: nats://nats:4222
@@ -219,8 +220,10 @@ services:
       LOG_LEVEL: debug
       DATABASE_URL: postgres://app:${POSTGRES_PASSWORD}@postgres:5432/social?sslmode=disable
       JWT_SECRET: ${JWT_SECRET}
+      GRPC_ADDR: :9096
     ports:
       - "8086:8086"
+      - "9096:9096"
     depends_on:
       postgres:
         condition: service_healthy

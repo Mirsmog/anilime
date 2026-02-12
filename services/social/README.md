@@ -11,6 +11,7 @@ The social service provides ratings and **comments** (Reddit-like threaded discu
 | `JWT_SECRET`    | yes      | Shared HMAC secret for verifying JWT tokens.                                |
 | `APP_ENV`       | no       | Set to `production` to enforce Postgres (exits if unavailable).             |
 | `HTTP_ADDR`     | no       | Listen address (default `:8080`).                                           |
+| `GRPC_ADDR`     | no       | gRPC listen address (default `:9090`).                                      |
 | `LOG_LEVEL`     | no       | Zap log level (default `info`).                                             |
 
 ## Development Fallback (InMemory)
