@@ -57,6 +57,10 @@ func main() {
 
 	pub, err := publisher.New(billingCfg.NATSURL, log)
 	if err != nil {
+		if isProd {
+			log.Error("NATS is required in production", zap.Error(err))
+			run.Exit(1)
+		}
 		log.Warn("NATS unavailable, billing events will not be published", zap.Error(err))
 		pub, _ = publisher.New("", log) // stub
 	}

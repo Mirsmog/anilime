@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -16,6 +15,7 @@ import (
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	"github.com/example/anime-platform/internal/platform/db"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	catalogconfig "github.com/example/anime-platform/services/catalog/internal/config"
 	grpcapi "github.com/example/anime-platform/services/catalog/internal/grpc"
@@ -57,7 +57,7 @@ func main() {
 	catalogv1.RegisterCatalogServiceServer(grpcSrv, &grpcapi.CatalogService{DB: pool})
 	reflection.Register(grpcSrv)
 
-	nc, err := nats.Connect(outboxCfg.NATSURL)
+	nc, err := natsconn.Connect(natsconn.Options{URL: outboxCfg.NATSURL})
 	if err != nil {
 		log.Error("nats connect", zap.Error(err))
 		run.Exit(1)

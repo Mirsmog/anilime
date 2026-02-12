@@ -16,6 +16,7 @@ import (
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	"github.com/example/anime-platform/services/ingestion/internal/animekai"
 	inkcfg "github.com/example/anime-platform/services/ingestion/internal/config"
@@ -25,8 +26,6 @@ import (
 	"github.com/example/anime-platform/services/ingestion/internal/jobs"
 	"github.com/example/anime-platform/services/ingestion/internal/queue"
 	"github.com/example/anime-platform/services/ingestion/internal/ratelimit"
-
-	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -71,7 +70,7 @@ func main() {
 	}
 
 	// Start JetStream worker
-	nc, err := nats.Connect(ink.NATSURL)
+	nc, err := natsconn.Connect(natsconn.Options{URL: ink.NATSURL})
 	if err != nil {
 		log.Error("nats connect", zap.Error(err))
 		run.Exit(1)

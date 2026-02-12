@@ -4,10 +4,11 @@ package publisher
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+
+	"github.com/example/anime-platform/internal/platform/natsconn"
 )
 
 const (
@@ -30,11 +31,7 @@ func New(natsURL string, log *zap.Logger) (*Publisher, error) {
 		return &Publisher{log: log}, nil
 	}
 
-	nc, err := nats.Connect(natsURL,
-		nats.RetryOnFailedConnect(true),
-		nats.MaxReconnects(10),
-		nats.ReconnectWait(2*time.Second),
-	)
+	nc, err := natsconn.Connect(natsconn.Options{URL: natsURL})
 	if err != nil {
 		return nil, err
 	}

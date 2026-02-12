@@ -14,12 +14,11 @@ import (
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	"github.com/example/anime-platform/services/bff/internal/admin"
 	bffconfig "github.com/example/anime-platform/services/bff/internal/config"
 	"github.com/example/anime-platform/services/bff/internal/grpcclient"
-
-	"github.com/nats-io/nats.go"
 
 	bffhandlers "github.com/example/anime-platform/services/bff/internal/handlers"
 	bffhttp "github.com/example/anime-platform/services/bff/internal/http"
@@ -47,7 +46,7 @@ func main() {
 
 	verifier := auth.JWTVerifier{Secret: bffCfg.JWTSecret}
 
-	nc, err := nats.Connect(bffCfg.NATSURL)
+	nc, err := natsconn.Connect(natsconn.Options{URL: bffCfg.NATSURL})
 	if err != nil {
 		log.Error("nats connect", zap.Error(err))
 		run.Exit(1)

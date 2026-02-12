@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -18,6 +17,7 @@ import (
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	searchv1 "github.com/example/anime-platform/gen/search/v1"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	"github.com/example/anime-platform/services/search/internal/config"
 	"github.com/example/anime-platform/services/search/internal/grpcapi"
@@ -42,7 +42,7 @@ func main() {
 		run.Exit(1)
 	}
 
-	nc, err := nats.Connect(cfg.NATSURL)
+	nc, err := natsconn.Connect(natsconn.Options{URL: cfg.NATSURL})
 	if err != nil {
 		log.Error("nats connect", zap.Error(err))
 		run.Exit(1)
