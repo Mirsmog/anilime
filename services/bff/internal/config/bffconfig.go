@@ -13,6 +13,7 @@ type BFFConfig struct {
 	ActivityGRPCAddr      string
 	SearchGRPCAddr        string
 	StreamingGRPCAddr     string
+	SocialGRPCAddr        string
 	HLSProxyBaseURL       string
 	HLSProxySigningSecret string
 	NATSURL               string
@@ -44,6 +45,10 @@ func LoadBFF() (BFFConfig, error) {
 	if streamingAddr == "" {
 		return BFFConfig{}, errors.New("STREAMING_GRPC_ADDR is required")
 	}
+	socialAddr := strings.TrimSpace(os.Getenv("SOCIAL_GRPC_ADDR"))
+	if socialAddr == "" {
+		return BFFConfig{}, errors.New("SOCIAL_GRPC_ADDR is required")
+	}
 	hlsBase := strings.TrimSpace(os.Getenv("HLS_PROXY_BASE_URL"))
 	if hlsBase == "" {
 		return BFFConfig{}, errors.New("HLS_PROXY_BASE_URL is required")
@@ -62,5 +67,5 @@ func LoadBFF() (BFFConfig, error) {
 		jikanURL = "https://api.jikan.moe/v4"
 	}
 
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
+	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, SocialGRPCAddr: socialAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
 }

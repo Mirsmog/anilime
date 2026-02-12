@@ -2,18 +2,24 @@ package main
 
 import (
 	"context"
+	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
+	socialv1 "github.com/example/anime-platform/gen/social/v1"
 	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/run"
+	"github.com/example/anime-platform/services/social/internal/grpcapi"
 	"github.com/example/anime-platform/services/social/internal/handlers"
 	"github.com/example/anime-platform/services/social/internal/store"
 )
@@ -59,10 +65,40 @@ func main() {
 
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
 
+	// gRPC server
+	grpcAddr := strings.TrimSpace(os.Getenv("GRPC_ADDR"))
+	if grpcAddr == "" {
+		grpcAddr = ":9090"
+	}
+	lis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		log.Error("grpc listen", zap.Error(err))
+		run.Exit(1)
+	}
+	grpcSrv := grpc.NewServer()
+	socialv1.RegisterSocialServiceServer(grpcSrv, &grpcapi.SocialService{Comments: comments})
+	reflection.Register(grpcSrv)
+	go func() {
+		log.Info("grpc server starting", zap.String("addr", grpcAddr))
+		if err := grpcSrv.Serve(lis); err != nil {
+			log.Error("grpc serve", zap.Error(err))
+		}
+	}()
+
 	runner := run.New(log)
 	code := runner.WithSignals(func(ctx context.Context) error {
 		go func() {
 			<-ctx.Done()
+			stopped := make(chan struct{})
+			go func() {
+				grpcSrv.GracefulStop()
+				close(stopped)
+			}()
+			select {
+			case <-stopped:
+			case <-time.After(10 * time.Second):
+				grpcSrv.Stop()
+			}
 			_ = srv.Shutdown(context.Background())
 		}()
 		return srv.Start(log)

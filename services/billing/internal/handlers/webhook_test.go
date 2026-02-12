@@ -28,8 +28,8 @@ func makeTestSignature(payload []byte, secret string) string {
 func newTestHandler() *WebhookHandler {
 	log, _ := zap.NewDevelopment()
 	idem, _ := idempotency.NewStore("", "", 0, false) // in-memory for tests
-	st := billingstore.New(nil)             // stub — no DB
-	pub, _ := publisher.New("", log)        // stub — no NATS
+	st := billingstore.New(nil)                       // stub — no DB
+	pub, _ := publisher.New("", log)                  // stub — no NATS
 	return NewWebhookHandler(testSecret, log, idem, st, pub)
 }
 

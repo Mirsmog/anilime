@@ -92,6 +92,13 @@ func main() {
 	}
 	defer streamingc.Conn.Close()
 
+	socialc, err := grpcclient.NewSocialClient(bffCfg.SocialGRPCAddr)
+	if err != nil {
+		log.Error("init social grpc client", zap.Error(err))
+		run.Exit(1)
+	}
+	defer socialc.Conn.Close()
+
 	// Example route: in real BFF you aggregate from other services.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -149,7 +156,15 @@ func main() {
 
 		r.Post("/v1/activity/progress", bffhandlers.UpsertProgress(activityc.Client))
 		r.Get("/v1/activity/continue", bffhandlers.ContinueWatching(activityc.Client, catalogc.Client))
+
+		r.Post("/v1/comments/{anime_id}", bffhandlers.CreateComment(socialc.Client))
+		r.Post("/v1/comments/{comment_id}/vote", bffhandlers.VoteComment(socialc.Client))
+		r.Put("/v1/comments/{comment_id}", bffhandlers.UpdateComment(socialc.Client))
+		r.Delete("/v1/comments/{comment_id}", bffhandlers.DeleteComment(socialc.Client))
 	})
+
+	// Public comment listing (no auth required)
+	r.Get("/v1/comments/{anime_id}", bffhandlers.ListComments(socialc.Client))
 
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
 
