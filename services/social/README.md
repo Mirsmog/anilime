@@ -23,7 +23,9 @@ export JWT_SECRET=dev-secret
 go run ./services/social/cmd/social
 ```
 
-> **Warning:** in-memory stores lose all data on restart and are not suitable for production.
+> **Warning:** in-memory stores lose all data on restart and are **not allowed in production**.
+> When `APP_ENV=production`, `DATABASE_URL` is required and `pgxpool.Ping` is verified
+> at startup. If Postgres is unreachable, the service exits immediately.
 
 ## Migrations
 
