@@ -1,0 +1,631 @@
+openapi: "3.0.3"
+info:
+  title: Anime Platform BFF API
+  version: "1.0.0"
+  description: |
+    REST API exposed by the BFF gateway service.
+    All authenticated endpoints require a Bearer JWT token in the Authorization header.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  # ── Auth ───────────────────────────────────────────────────────────
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email/username and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (revoke refresh token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Logged out
+
+  # ── Me ─────────────────────────────────────────────────────────────
+  /v1/me:
+    get:
+      tags: [User]
+      summary: Get current user profile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Search ─────────────────────────────────────────────────────────
+  /v1/search:
+    get:
+      tags: [Search]
+      summary: Search anime
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: genres
+          in: query
+          description: Comma-separated genre list
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: min_score
+          in: query
+          schema:
+            type: number
+        - name: max_score
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+
+  # ── Watch ──────────────────────────────────────────────────────────
+  /v1/watch/{episode_id}:
+    get:
+      tags: [Watch]
+      summary: Get playback data for an episode (signed HLS URL)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: episode_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [sub, dub, raw]
+        - name: server
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Playback data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Activity ───────────────────────────────────────────────────────
+  /v1/activity/progress:
+    post:
+      tags: [Activity]
+      summary: Upsert watch progress for an episode
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProgressRequest"
+      responses:
+        "200":
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpisodeProgress"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/activity/continue:
+    get:
+      tags: [Activity]
+      summary: Get continue-watching list
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Continue watching items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContinueWatchingResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Sources ────────────────────────────────────────────────────────
+  /v1/sources/{anime_id}:
+    get:
+      tags: [Streaming]
+      summary: Get streaming sources for an episode
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Episode ID (passed as anime_id path param)
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [sub, dub, raw]
+        - name: server
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Streaming sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourcesResponse"
+        "502":
+          description: Upstream resolver unavailable
+
+  # ── Stripe Webhook ─────────────────────────────────────────────────
+  /v1/stripe/webhook:
+    post:
+      tags: [Billing]
+      summary: Stripe webhook endpoint
+      description: |
+        Receives Stripe webhook events. Verifies signature via Stripe-Signature header.
+        Handles checkout.session.completed and invoice.paid events idempotently.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe event payload
+      responses:
+        "200":
+          description: Event processed
+        "400":
+          description: Invalid signature or payload
+
+  # ── Ratings ────────────────────────────────────────────────────────
+  /v1/ratings/{anime_id}:
+    get:
+      tags: [Social]
+      summary: Get rating summary for an anime
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          description: Include user's own rating if provided
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rating summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingSummaryResponse"
+    post:
+      tags: [Social]
+      summary: Submit or update a rating for an anime
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateRequest"
+      responses:
+        "200":
+          description: Updated rating summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+            request_id:
+              type: string
+
+    RegisterRequest:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        password:
+          type: string
+          minLength: 8
+
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+          description: Email or username
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserInfo"
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+
+    MeResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+
+    SearchResponse:
+      type: object
+      properties:
+        hits:
+          type: array
+          items:
+            type: object
+            description: Anime hit from search index
+        total:
+          type: integer
+
+    PlaybackSource:
+      type: object
+      properties:
+        url:
+          type: string
+        quality:
+          type: string
+        is_m3u8:
+          type: boolean
+
+    PlaybackTrack:
+      type: object
+      properties:
+        kind:
+          type: string
+        file:
+          type: string
+        label:
+          type: string
+        language:
+          type: string
+
+    IntroOutro:
+      type: object
+      properties:
+        start:
+          type: number
+        end:
+          type: number
+
+    WatchResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybackSource"
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybackTrack"
+        intro:
+          $ref: "#/components/schemas/IntroOutro"
+        outro:
+          $ref: "#/components/schemas/IntroOutro"
+        signed_playback_url:
+          type: string
+
+    SourcesResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybackSource"
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybackTrack"
+        intro:
+          $ref: "#/components/schemas/IntroOutro"
+        outro:
+          $ref: "#/components/schemas/IntroOutro"
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        provider_episode_id:
+          type: string
+
+    UpsertProgressRequest:
+      type: object
+      required: [episode_id, position_seconds]
+      properties:
+        episode_id:
+          type: string
+        position_seconds:
+          type: integer
+        duration_seconds:
+          type: integer
+        client_ts_ms:
+          type: integer
+          format: int64
+
+    EpisodeProgress:
+      type: object
+      properties:
+        episode_id:
+          type: string
+        position_seconds:
+          type: integer
+        duration_seconds:
+          type: integer
+        completed:
+          type: boolean
+        updated_at_ms:
+          type: integer
+          format: int64
+        client_ts_ms:
+          type: integer
+          format: int64
+
+    ContinueWatchingResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              episode:
+                type: object
+                properties:
+                  episode_id:
+                    type: string
+                  anime_id:
+                    type: string
+                  number:
+                    type: integer
+                  title:
+                    type: string
+                  aired_at:
+                    type: string
+              progress:
+                $ref: "#/components/schemas/EpisodeProgress"
+        limit:
+          type: integer
+        next_cursor:
+          type: string
+
+    RatingSummary:
+      type: object
+      properties:
+        anime_id:
+          type: string
+        average_score:
+          type: number
+        total_ratings:
+          type: integer
+
+    RatingSummaryResponse:
+      type: object
+      properties:
+        anime_id:
+          type: string
+        average_score:
+          type: number
+        total_ratings:
+          type: integer
+        user_score:
+          type: integer
+          nullable: true
+
+    RateRequest:
+      type: object
+      required: [user_id, score]
+      properties:
+        user_id:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 10

@@ -20,11 +20,11 @@ type Config struct {
 	// HTTP client headers for upstream requests (configurable via env).
 	HiAnimeUserAgent string
 	// Retry and circuit-breaker settings.
-	MaxRetries        int
-	RetryBaseDelay    time.Duration
-	CBMaxRequests     uint32
-	CBInterval        time.Duration
-	CBTimeout         time.Duration
+	MaxRetries         int
+	RetryBaseDelay     time.Duration
+	CBMaxRequests      uint32
+	CBInterval         time.Duration
+	CBTimeout          time.Duration
 	CBFailureThreshold uint32
 }
 
