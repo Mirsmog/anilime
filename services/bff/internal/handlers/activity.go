@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 
 	activityv1 "github.com/example/anime-platform/gen/activity/v1"
@@ -68,6 +69,29 @@ func UpsertProgress(activity activityv1.ActivityServiceClient) http.HandlerFunc 
 			req.ClientTsMs = time.Now().UnixMilli()
 		}
 
+		// If JetStream is configured and async writes enabled, publish event and return 202.
+		if JS != nil && AsyncWrites {
+			eventID := uuid.NewString()
+			payload := map[string]interface{}{
+				"event_id":     eventID,
+				"user_id":      uid,
+				"anime_id":     "",
+				"episode_id":   strings.TrimSpace(req.EpisodeID),
+				"position":     req.PositionSeconds,
+				"client_ts_ms": req.ClientTsMs,
+				"created_at":   time.Now().UTC().Format(time.RFC3339),
+			}
+			b, _ := json.Marshal(payload)
+			if _, err := JS.Publish("activity.progress", b); err != nil {
+				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+				return
+			}
+			w.Header().Set("X-Event-ID", eventID)
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		// Fallback to synchronous gRPC call if JetStream not configured or async disabled.
 		ctx := metadata.NewOutgoingContext(r.Context(), metadata.New(nil))
 		resp, err := activity.UpsertEpisodeProgress(ctx, &activityv1.UpsertEpisodeProgressRequest{
 			UserId:          uid,

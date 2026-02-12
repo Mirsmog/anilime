@@ -60,6 +60,8 @@ func main() {
 
 	// init bff cache with NATS invalidation
 	bffhandlers.InitCache(bffCfg.CacheTTLSeconds, nc, bffCfg.CacheInvalidationSubj)
+	// provide JetStream to handlers for async publishes
+	bffhandlers.SetJetStream(js)
 	authc, err := grpcclient.NewAuthClient(bffCfg.AuthGRPCAddr)
 	if err != nil {
 		log.Error("init auth grpc client", zap.Error(err))

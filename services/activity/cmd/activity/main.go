@@ -15,9 +15,11 @@ import (
 	activityv1 "github.com/example/anime-platform/gen/activity/v1"
 	"github.com/example/anime-platform/internal/platform/db"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	grpcconfig "github.com/example/anime-platform/services/activity/internal/config"
 	grpcapi "github.com/example/anime-platform/services/activity/internal/grpc"
+	"github.com/example/anime-platform/services/activity/internal/worker"
 )
 
 func main() {
@@ -55,6 +57,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// start NATS consumer for activity progress
+	nc, err := natsconn.Connect(natsconn.Options{})
+	if err != nil {
+		log.Error("nats connect", zap.Error(err))
+	} else {
+		// start worker that consumes progress events and writes to DB
+		go worker.StartProgressConsumer(ctx, nc, pool)
+		defer nc.Close()
+	}
+
 	go func() {
 		<-ctx.Done()
 		stopped := make(chan struct{})
