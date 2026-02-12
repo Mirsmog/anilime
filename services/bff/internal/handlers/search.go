@@ -29,13 +29,22 @@ func Search(search searchv1.SearchServiceClient) http.HandlerFunc {
 		minScore := parseFloat32(r.URL.Query().Get("min_score"), 0)
 		maxScore := parseFloat32(r.URL.Query().Get("max_score"), 0)
 
+		// Cache key based on raw query
+		key := "Search:" + r.URL.RawQuery
+		if cached, ok := cacheGet(key); ok {
+			api.WriteJSON(w, http.StatusOK, cached)
+			return
+		}
+
 		ctx := metadata.NewOutgoingContext(r.Context(), metadata.New(nil))
 		resp, err := search.SearchAnime(ctx, &searchv1.SearchAnimeRequest{Query: q, Limit: limit, Offset: offset, Genres: genres, Status: status, Type: animeType, MinScore: minScore, MaxScore: maxScore})
 		if err != nil {
 			writeGRPCError(w, rid, err)
 			return
 		}
-		api.WriteJSON(w, http.StatusOK, searchResponse{Hits: resp.GetHits(), Total: resp.GetTotal()})
+		out := searchResponse{Hits: resp.GetHits(), Total: resp.GetTotal()}
+		cacheSet(key, out)
+		api.WriteJSON(w, http.StatusOK, out)
 	}
 }
 

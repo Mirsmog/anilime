@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,8 @@ type BFFConfig struct {
 	HLSProxySigningSecret string
 	NATSURL               string
 	JikanBaseURL          string
+	CacheTTLSeconds       int
+	CacheInvalidationSubj string
 }
 
 func LoadBFF() (BFFConfig, error) {
@@ -67,5 +70,17 @@ func LoadBFF() (BFFConfig, error) {
 		jikanURL = "https://api.jikan.moe/v4"
 	}
 
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, SocialGRPCAddr: socialAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL}, nil
+	// optional cache TTL for BFF list/search responses (seconds)
+	ttl := 60
+	if v := strings.TrimSpace(os.Getenv("BFF_CACHE_TTL_SEC")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			ttl = n
+		}
+	}
+	subj := strings.TrimSpace(os.Getenv("BFF_CACHE_INVALIDATION_SUBJ"))
+	if subj == "" {
+		subj = "bff.cache.invalidate"
+	}
+
+	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, SocialGRPCAddr: socialAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL, CacheTTLSeconds: ttl, CacheInvalidationSubj: subj}, nil
 }

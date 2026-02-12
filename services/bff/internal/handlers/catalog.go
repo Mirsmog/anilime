@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -149,6 +150,13 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 		limit := parseInt32(r.URL.Query().Get("limit"), 25, 1, 100)
 		offset := parseInt32(r.URL.Query().Get("offset"), 0, 0, 10000)
 
+		// Try cache first
+		key := fmt.Sprintf("ListAnime:%d:%d", limit, offset)
+		if cached, ok := cacheGet(key); ok {
+			api.WriteJSON(w, http.StatusOK, cached)
+			return
+		}
+
 		ctx := metadata.NewOutgoingContext(r.Context(), metadata.New(nil))
 		idsResp, err := catalog.GetAnimeIDs(ctx, &catalogv1.GetAnimeIDsRequest{})
 		if err != nil {
@@ -160,7 +168,9 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 		total := int32(len(allIDs))
 
 		if offset >= total {
-			api.WriteJSON(w, http.StatusOK, map[string]any{"anime": []any{}, "total": total, "limit": limit, "offset": offset})
+			resp := map[string]any{"anime": []any{}, "total": total, "limit": limit, "offset": offset}
+			cacheSet(key, resp)
+			api.WriteJSON(w, http.StatusOK, resp)
 			return
 		}
 
@@ -181,6 +191,8 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 			items = append(items, toAnimeResponse(a))
 		}
 
-		api.WriteJSON(w, http.StatusOK, map[string]any{"anime": items, "total": total, "limit": limit, "offset": offset})
+		resp := map[string]any{"anime": items, "total": total, "limit": limit, "offset": offset}
+		cacheSet(key, resp)
+		api.WriteJSON(w, http.StatusOK, resp)
 	}
 }
