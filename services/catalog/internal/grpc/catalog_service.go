@@ -37,6 +37,66 @@ func (s *CatalogService) insertOutboxEvent(ctx context.Context, tx pgx.Tx, event
 	return err
 }
 
+// episodeInput — общая структура для upsert-а эпизода из любого провайдера.
+type episodeInput struct {
+	providerEpisodeID string
+	number            int32
+	title             string
+	url               string
+	isFiller          bool
+	hasIsFiller       bool // true если поле is_filler задано (hianime)
+}
+
+// upsertEpisodes выполняет upsert эпизодов внутри транзакции, устраняя дублирование
+// между UpsertAnimeKaiAnime и UpsertHiAnimeEpisodes.
+func upsertEpisodes(ctx context.Context, tx pgx.Tx, provider string, animeID uuid.UUID, episodes []episodeInput, now time.Time) ([]string, error) {
+	episodeIDs := make([]string, 0, len(episodes))
+	for _, ep := range episodes {
+		if ep.providerEpisodeID == "" {
+			continue
+		}
+
+		var episodeID uuid.UUID
+		qFind := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
+		err := tx.QueryRow(ctx, qFind, provider, ep.providerEpisodeID).Scan(&episodeID)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return nil, status.Error(codes.Internal, "db")
+			}
+			episodeID = uuid.New()
+			if ep.hasIsFiller {
+				qIns := `INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at) VALUES ($1,$2,$3,$4,'',$5,$6)`
+				if _, err := tx.Exec(ctx, qIns, episodeID, animeID, ep.number, ep.title, ep.isFiller, now); err != nil {
+					return nil, status.Error(codes.Internal, "db")
+				}
+			} else {
+				qIns := `INSERT INTO episodes (id, anime_id, number, title, url, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`
+				if _, err := tx.Exec(ctx, qIns, episodeID, animeID, ep.number, ep.title, ep.url, now); err != nil {
+					return nil, status.Error(codes.Internal, "db")
+				}
+			}
+			qInsMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
+			if _, err := tx.Exec(ctx, qInsMap, provider, ep.providerEpisodeID, episodeID); err != nil {
+				return nil, status.Error(codes.Internal, "db")
+			}
+		} else {
+			if ep.hasIsFiller {
+				qUpd := `UPDATE episodes SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6 WHERE id=$1`
+				if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.number, ep.title, ep.isFiller, now); err != nil {
+					return nil, status.Error(codes.Internal, "db")
+				}
+			} else {
+				qUpd := `UPDATE episodes SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6 WHERE id=$1`
+				if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.number, ep.title, ep.url, now); err != nil {
+					return nil, status.Error(codes.Internal, "db")
+				}
+			}
+		}
+		episodeIDs = append(episodeIDs, episodeID.String())
+	}
+	return episodeIDs, nil
+}
+
 func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.GetEpisodesByIDsRequest) (*catalogv1.GetEpisodesByIDsResponse, error) {
 	ids := req.GetEpisodeIds()
 	if len(ids) == 0 {
@@ -228,47 +288,23 @@ DO UPDATE SET anime_id = EXCLUDED.anime_id;
 		return nil, status.Error(codes.Internal, "db")
 	}
 
-	episodeIDs := make([]string, 0, len(req.GetEpisodes()))
+	// Собираем эпизоды в единый формат и делегируем в upsertEpisodes
+	episodes := make([]episodeInput, 0, len(req.GetEpisodes()))
 	for _, ep := range req.GetEpisodes() {
 		if ep == nil {
 			continue
 		}
-		provEpID := strings.TrimSpace(ep.GetProviderEpisodeId())
-		if provEpID == "" {
-			continue
-		}
-
-		var episodeID uuid.UUID
-		qFind := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
-		err := tx.QueryRow(ctx, qFind, provider, provEpID).Scan(&episodeID)
-		if err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return nil, status.Error(codes.Internal, "db")
-			}
-			episodeID = uuid.New()
-			qInsEp := `
-INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at)
-VALUES ($1,$2,$3,$4,'',$5,$6)
-`
-			if _, err := tx.Exec(ctx, qInsEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetIsFiller(), now); err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-			qInsMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
-			if _, err := tx.Exec(ctx, qInsMap, provider, provEpID, episodeID); err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		} else {
-			qUpd := `
-UPDATE episodes
-SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6
-WHERE id=$1
-`
-			if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetIsFiller(), now); err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		}
-
-		episodeIDs = append(episodeIDs, episodeID.String())
+		episodes = append(episodes, episodeInput{
+			providerEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
+			number:            ep.GetNumber(),
+			title:             ep.GetTitle(),
+			isFiller:          ep.GetIsFiller(),
+			hasIsFiller:       true,
+		})
+	}
+	episodeIDs, err := upsertEpisodes(ctx, tx, provider, animeID, episodes, now)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
@@ -452,51 +488,22 @@ WHERE id=$1
 		}
 	}
 
-	// 2) upsert episodes + mappings
-	episodeIDs := make([]string, 0, len(anime.GetEpisodes()))
+	// Собираем эпизоды в единый формат и делегируем в upsertEpisodes
+	episodes := make([]episodeInput, 0, len(anime.GetEpisodes()))
 	for _, ep := range anime.GetEpisodes() {
 		if ep == nil {
 			continue
 		}
-		provEpID := strings.TrimSpace(ep.GetProviderEpisodeId())
-		if provEpID == "" {
-			continue
-		}
-
-		var episodeID uuid.UUID
-		qFindEp := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
-		err = tx.QueryRow(ctx, qFindEp, provider, provEpID).Scan(&episodeID)
-		if err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return nil, status.Error(codes.Internal, "db")
-			}
-			episodeID = uuid.New()
-			qInsertEp := `
-INSERT INTO episodes (id, anime_id, number, title, url, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6)
-`
-			_, err = tx.Exec(ctx, qInsertEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetUrl(), now)
-			if err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-			qInsertEpMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
-			_, err = tx.Exec(ctx, qInsertEpMap, provider, provEpID, episodeID)
-			if err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		} else {
-			qUpdateEp := `
-UPDATE episodes
-SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6
-WHERE id=$1
-`
-			_, err = tx.Exec(ctx, qUpdateEp, episodeID, animeID, ep.GetNumber(), ep.GetTitle(), ep.GetUrl(), now)
-			if err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		}
-
-		episodeIDs = append(episodeIDs, episodeID.String())
+		episodes = append(episodes, episodeInput{
+			providerEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
+			number:            ep.GetNumber(),
+			title:             ep.GetTitle(),
+			url:               ep.GetUrl(),
+		})
+	}
+	episodeIDs, err := upsertEpisodes(ctx, tx, provider, animeID, episodes, now)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {

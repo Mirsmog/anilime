@@ -9,7 +9,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: app
     volumes:
       - ./deployments/postgres/init-multiple-dbs.sql:/docker-entrypoint-initdb.d/01-init-multiple-dbs.sql:ro
@@ -31,7 +31,7 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.7
     environment:
-      MEILI_MASTER_KEY: dev-master-key
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
     ports:
       - "7700:7700"
 
@@ -46,7 +46,7 @@ services:
       CATALOG_GRPC_ADDR: catalog:9092
       NATS_URL: nats://nats:4222
       MEILI_URL: http://meilisearch:7700
-      MEILI_API_KEY: dev-master-key
+      MEILI_API_KEY: ${MEILI_MASTER_KEY}
       REINDEX_INTERVAL: 24h
     ports:
       - "9094:9094"
@@ -87,7 +87,7 @@ services:
       SERVICE_NAME: hls-proxy
       LOG_LEVEL: debug
       HTTP_ADDR: :8084
-      HLS_SIGNING_SECRET: dev-hls-secret
+      HLS_SIGNING_SECRET: ${HLS_SIGNING_SECRET}
     ports:
       - "8084:8084"
 
@@ -99,14 +99,14 @@ services:
       SERVICE_NAME: bff
       HTTP_ADDR: :8080
       LOG_LEVEL: debug
-      JWT_SECRET: dev-secret-change-me
+      JWT_SECRET: ${JWT_SECRET}
       AUTH_GRPC_ADDR: auth:9091
       CATALOG_GRPC_ADDR: catalog:9092
       ACTIVITY_GRPC_ADDR: activity:9093
       SEARCH_GRPC_ADDR: search:9094
       STREAMING_GRPC_ADDR: streaming-resolver:9095
       HLS_PROXY_BASE_URL: http://hls-proxy:8084
-      HLS_SIGNING_SECRET: dev-hls-secret
+      HLS_SIGNING_SECRET: ${HLS_SIGNING_SECRET}
       NATS_URL: nats://nats:4222
       JIKAN_BASE_URL: https://api.jikan.moe/v4
     ports:
@@ -126,8 +126,8 @@ services:
     environment:
       SERVICE_NAME: auth
       LOG_LEVEL: debug
-      DATABASE_URL: postgres://app:app@postgres:5432/auth?sslmode=disable
-      JWT_SECRET: dev-secret-change-me
+      DATABASE_URL: postgres://app:${POSTGRES_PASSWORD}@postgres:5432/auth?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 720h
       GRPC_ADDR: :9091
@@ -145,7 +145,7 @@ services:
     environment:
       SERVICE_NAME: catalog
       LOG_LEVEL: debug
-      DATABASE_URL: postgres://app:app@postgres:5432/catalog?sslmode=disable
+      DATABASE_URL: postgres://app:${POSTGRES_PASSWORD}@postgres:5432/catalog?sslmode=disable
       GRPC_ADDR: :9092
       NATS_URL: nats://nats:4222
     ports:
@@ -189,7 +189,7 @@ services:
       HTTP_ADDR: :8084
       LOG_LEVEL: debug
     ports:
-      - "8084:8084"
+      - "8085:8084"
     depends_on:
       redis:
         condition: service_started
@@ -201,7 +201,7 @@ services:
     environment:
       SERVICE_NAME: activity
       LOG_LEVEL: debug
-      DATABASE_URL: postgres://app:app@postgres:5432/activity?sslmode=disable
+      DATABASE_URL: postgres://app:${POSTGRES_PASSWORD}@postgres:5432/activity?sslmode=disable
       GRPC_ADDR: :9093
     ports:
       - "9093:9093"
@@ -231,8 +231,8 @@ services:
       SERVICE_NAME: billing
       HTTP_ADDR: :8087
       LOG_LEVEL: debug
-      STRIPE_WEBHOOK_SECRET: dev
-      STRIPE_SECRET_KEY: dev
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_SECRET_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
     ports:
       - "8087:8087"
     depends_on:
