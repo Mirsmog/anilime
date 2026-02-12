@@ -122,8 +122,20 @@ FOR UPDATE SKIP LOCKED
 		return nil
 	}
 
+	// Publish all items asynchronously for better throughput, then wait for acks.
+	futures := make([]nats.PubAckFuture, 0, len(items))
 	for _, item := range items {
-		if _, err := p.JS.Publish(item.EventType, item.Payload); err != nil {
+		f, err := p.JS.PublishAsync(item.EventType, item.Payload)
+		if err != nil {
+			return err
+		}
+		futures = append(futures, f)
+	}
+	// Wait for all acks before marking rows as published.
+	for _, f := range futures {
+		select {
+		case <-f.Ok():
+		case err := <-f.Err():
 			return err
 		}
 	}
