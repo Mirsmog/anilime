@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/services/billing/internal/idempotency"
+	"github.com/example/anime-platform/services/billing/internal/publisher"
+	billingstore "github.com/example/anime-platform/services/billing/internal/store"
 	"github.com/example/anime-platform/services/billing/internal/stripe"
 )
 
@@ -28,13 +31,23 @@ type WebhookHandler struct {
 	secret     string
 	log        *zap.Logger
 	idempotent idempotency.Store
+	store      *billingstore.BillingStore
+	pub        *publisher.Publisher
 }
 
-func NewWebhookHandler(secret string, log *zap.Logger, idem idempotency.Store) *WebhookHandler {
+func NewWebhookHandler(
+	secret string,
+	log *zap.Logger,
+	idem idempotency.Store,
+	st *billingstore.BillingStore,
+	pub *publisher.Publisher,
+) *WebhookHandler {
 	return &WebhookHandler{
 		secret:     secret,
 		log:        log,
 		idempotent: idem,
+		store:      st,
+		pub:        pub,
 	}
 }
 
@@ -80,9 +93,17 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Handle specific event types.
 	switch event.Type {
 	case "checkout.session.completed":
-		h.handleCheckoutCompleted(event)
+		if err := h.handleCheckoutCompleted(r.Context(), event); err != nil {
+			h.log.Error("handle checkout failed", zap.Error(err))
+			api.Internal(w, "")
+			return
+		}
 	case "invoice.paid":
-		h.handleInvoicePaid(event)
+		if err := h.handleInvoicePaid(r.Context(), event); err != nil {
+			h.log.Error("handle invoice failed", zap.Error(err))
+			api.Internal(w, "")
+			return
+		}
 	default:
 		h.log.Debug("unhandled event type", zap.String("type", event.Type), zap.String("event_id", event.ID))
 	}
@@ -90,16 +111,56 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *WebhookHandler) handleCheckoutCompleted(event stripeEvent) {
-	h.log.Info("checkout.session.completed",
-		zap.String("event_id", event.ID),
-	)
-	// TODO: persist payment and publish NATS event (next commit).
+func (h *WebhookHandler) handleCheckoutCompleted(ctx context.Context, event stripeEvent) error {
+	h.log.Info("checkout.session.completed", zap.String("event_id", event.ID))
+
+	// Persist payment transactionally before publishing.
+	if h.store.Available() {
+		tx, err := h.store.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if err := h.store.SavePayment(ctx, tx, event.ID, event.Data.Object); err != nil {
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+	}
+
+	// Publish NATS event after successful persistence.
+	return h.pub.Publish(ctx, publisher.SubjectPaymentCompleted, publisher.BillingEvent{
+		EventID:   event.ID,
+		EventType: event.Type,
+		Data:      event.Data.Object,
+	})
 }
 
-func (h *WebhookHandler) handleInvoicePaid(event stripeEvent) {
-	h.log.Info("invoice.paid",
-		zap.String("event_id", event.ID),
-	)
-	// TODO: persist subscription and publish NATS event (next commit).
+func (h *WebhookHandler) handleInvoicePaid(ctx context.Context, event stripeEvent) error {
+	h.log.Info("invoice.paid", zap.String("event_id", event.ID))
+
+	// Persist subscription transactionally before publishing.
+	if h.store.Available() {
+		tx, err := h.store.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if err := h.store.SaveSubscription(ctx, tx, event.ID, event.Data.Object); err != nil {
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+	}
+
+	// Publish NATS event after successful persistence.
+	return h.pub.Publish(ctx, publisher.SubjectSubscriptionUpdated, publisher.BillingEvent{
+		EventID:   event.ID,
+		EventType: event.Type,
+		Data:      event.Data.Object,
+	})
 }

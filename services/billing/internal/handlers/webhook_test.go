@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/example/anime-platform/services/billing/internal/idempotency"
+	"github.com/example/anime-platform/services/billing/internal/publisher"
+	billingstore "github.com/example/anime-platform/services/billing/internal/store"
 	stripeutil "github.com/example/anime-platform/services/billing/internal/stripe"
 )
 
@@ -26,7 +28,9 @@ func makeTestSignature(payload []byte, secret string) string {
 func newTestHandler() *WebhookHandler {
 	log, _ := zap.NewDevelopment()
 	idem := idempotency.NewStore("", "", 0) // in-memory
-	return NewWebhookHandler(testSecret, log, idem)
+	st := billingstore.New(nil)             // stub — no DB
+	pub, _ := publisher.New("", log)        // stub — no NATS
+	return NewWebhookHandler(testSecret, log, idem, st, pub)
 }
 
 func TestWebhook_ValidSignature(t *testing.T) {

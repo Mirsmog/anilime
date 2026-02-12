@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"github.com/example/anime-platform/internal/platform/config"
@@ -13,6 +14,8 @@ import (
 	billingconfig "github.com/example/anime-platform/services/billing/internal/config"
 	"github.com/example/anime-platform/services/billing/internal/handlers"
 	"github.com/example/anime-platform/services/billing/internal/idempotency"
+	"github.com/example/anime-platform/services/billing/internal/publisher"
+	billingstore "github.com/example/anime-platform/services/billing/internal/store"
 )
 
 func main() {
@@ -32,13 +35,34 @@ func main() {
 		panic(err)
 	}
 
+	// Optional Postgres pool for billing persistence.
+	var pool *pgxpool.Pool
+	if billingCfg.DatabaseURL != "" {
+		p, err := pgxpool.New(context.Background(), billingCfg.DatabaseURL)
+		if err != nil {
+			log.Warn("postgres unavailable, billing will run without persistence", zap.Error(err))
+		} else {
+			pool = p
+			defer pool.Close()
+			log.Info("postgres connected for billing")
+		}
+	}
+
 	idem := idempotency.NewStore(billingCfg.RedisDSN, billingCfg.DatabaseURL, billingCfg.IdempotencyTTL)
 	log.Info("idempotency store initialised",
 		zap.Bool("redis", billingCfg.RedisDSN != ""),
 		zap.Bool("postgres", billingCfg.DatabaseURL != ""),
 	)
 
-	webhookHandler := handlers.NewWebhookHandler(billingCfg.StripeWebhookSecret, log, idem)
+	st := billingstore.New(pool)
+
+	pub, err := publisher.New(billingCfg.NATSURL, log)
+	if err != nil {
+		log.Warn("NATS unavailable, billing events will not be published", zap.Error(err))
+		pub, _ = publisher.New("", log) // stub
+	}
+
+	webhookHandler := handlers.NewWebhookHandler(billingCfg.StripeWebhookSecret, log, idem, st, pub)
 
 	r := chi.NewRouter()
 	httpserver.SetupRouter(r)
