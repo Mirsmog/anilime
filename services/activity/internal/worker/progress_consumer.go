@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"strings"
@@ -39,6 +41,8 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 	}
 
 	go func() {
+		batchSize := envInt("WORKER_BATCH_SIZE", 100)
+		batchInterval := envInt("WORKER_BATCH_INTERVAL_MS", 2000)
 		for {
 			select {
 			case <-ctx.Done():
@@ -46,7 +50,7 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 			default:
 			}
 
-			msgs, err := sub.Fetch(10, nats.MaxWait(2*time.Second))
+			msgs, err := sub.Fetch(batchSize, nats.MaxWait(time.Duration(batchInterval)*time.Millisecond))
 			if err != nil {
 				if err == nats.ErrTimeout {
 					continue
@@ -56,97 +60,90 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 				continue
 			}
 
+			if len(msgs) == 0 {
+				continue
+			}
+
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				log.Printf("progress_consumer: db begin: %v", err)
+				for _, m := range msgs {
+					if err := m.Nak(); err != nil {
+						log.Printf("progress_consumer: nak error: %v", err)
+					}
+				}
+				continue
+			}
+
+			failed := false
 			for _, m := range msgs {
 				var ev ProgressEvent
 				if err := json.Unmarshal(m.Data, &ev); err != nil {
 					log.Printf("progress_consumer: invalid json: %v", err)
-					if err := m.Ack(); err != nil {
-						log.Printf("progress_consumer: ack error: %v", err)
-					}
-					continue
+					failed = true
+					break
 				}
 
-				// Begin transaction
-				tx, err := pool.Begin(ctx)
-				if err != nil {
-					log.Printf("progress_consumer: db begin: %v", err)
-					if err := m.Nak(); err != nil {
-						log.Printf("progress_consumer: nak error: %v", err)
-					}
-					continue
-				}
-
-				// Try insert into processed_events for idempotency; ON CONFLICT DO NOTHING
 				ct, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id, subject, created_at, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, ev.EventID, "activity.progress", ev.CreatedAt, m.Data)
 				if err != nil {
-					// If the processed_events table does not exist, fallback: rollback and continue without idempotency
 					if strings.Contains(err.Error(), "does not exist") {
+						// fallback: apply single message without idempotency in its own tx
 						_ = tx.Rollback(ctx)
-						log.Printf("progress_consumer: processed_events table missing, applying without idempotency")
-						// apply upsert below without processed_events
-						tx2, err2 := pool.Begin(ctx)
-						if err2 != nil {
-							log.Printf("progress_consumer: db begin2: %v", err2)
-							if err := m.Nak(); err != nil {
-								log.Printf("progress_consumer: nak error: %v", err)
-							}
-							continue
+						if err := applyProgressWithoutIdempotency(ctx, pool, &ev); err != nil {
+							log.Printf("progress_consumer: apply without idempotency failed: %v", err)
+							failed = true
 						}
-						if err := applyProgressUpsert(ctx, tx2, &ev); err != nil {
-							_ = tx2.Rollback(ctx)
-							log.Printf("progress_consumer: upsert without idempotency failed: %v", err)
-							if err := m.Nak(); err != nil {
-								log.Printf("progress_consumer: nak error: %v", err)
+						if !failed {
+							if err := m.Ack(); err != nil {
+								log.Printf("progress_consumer: ack error: %v", err)
 							}
-							continue
 						}
-						if err := tx2.Commit(ctx); err != nil {
-							log.Printf("progress_consumer: commit2 failed: %v", err)
-							if err := m.Nak(); err != nil {
-								log.Printf("progress_consumer: nak error: %v", err)
-							}
-							continue
-						}
-						if err := m.Ack(); err != nil {
-							log.Printf("progress_consumer: ack error: %v", err)
+						// start a new tx for remaining messages
+						tx, err = pool.Begin(ctx)
+						if err != nil {
+							failed = true
+							break
 						}
 						continue
 					}
 					log.Printf("progress_consumer: insert processed_events error: %v", err)
-					_ = tx.Rollback(ctx)
-					if err := m.Nak(); err != nil {
-						log.Printf("progress_consumer: nak error: %v", err)
-					}
-					continue
+					failed = true
+					break
 				}
 
 				if ct.RowsAffected() == 0 {
-					// already processed
-					_ = tx.Rollback(ctx)
-					if err := m.Ack(); err != nil {
-						log.Printf("progress_consumer: ack error: %v", err)
-					}
+					// already processed; skip
 					continue
 				}
 
-				// Apply the progress upsert
 				if err := applyProgressUpsert(ctx, tx, &ev); err != nil {
-					_ = tx.Rollback(ctx)
 					log.Printf("progress_consumer: upsert failed: %v", err)
+					failed = true
+					break
+				}
+			}
+
+			if failed {
+				_ = tx.Rollback(ctx)
+				for _, m := range msgs {
 					if err := m.Nak(); err != nil {
 						log.Printf("progress_consumer: nak error: %v", err)
 					}
-					continue
 				}
+				continue
+			}
 
-				if err := tx.Commit(ctx); err != nil {
-					log.Printf("progress_consumer: commit failed: %v", err)
+			if err := tx.Commit(ctx); err != nil {
+				log.Printf("progress_consumer: commit failed: %v", err)
+				for _, m := range msgs {
 					if err := m.Nak(); err != nil {
 						log.Printf("progress_consumer: nak error: %v", err)
 					}
-					continue
 				}
+				continue
+			}
 
+			for _, m := range msgs {
 				if err := m.Ack(); err != nil {
 					log.Printf("progress_consumer: ack error: %v", err)
 				}
@@ -176,4 +173,29 @@ WHERE user_episode_progress.client_ts_ms <= EXCLUDED.client_ts_ms;
 	now := time.Now().UTC()
 	_, err := tx.Exec(ctx, q, ev.UserID, ev.EpisodeID, pos, dur, completed, ev.ClientTsMs, now)
 	return err
+}
+
+// applyProgressWithoutIdempotency applies a single event without using processed_events (fallback path)
+func applyProgressWithoutIdempotency(ctx context.Context, pool *pgxpool.Pool, ev *ProgressEvent) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := applyProgressUpsert(ctx, tx, ev); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func envInt(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
 }
