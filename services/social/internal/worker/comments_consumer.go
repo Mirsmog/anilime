@@ -58,6 +58,17 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 		return
 	}
 
+	// Ensure stream exists before subscribing.
+	_, err = js.AddStream(&nats.StreamConfig{
+		Name:     "SOCIAL",
+		Subjects: []string{"social.comments.*"},
+		Storage:  nats.FileStorage,
+	})
+	if err != nil && !strings.Contains(err.Error(), "already in use") {
+		log.Printf("comments_consumer: add stream error: %v", err)
+		return
+	}
+
 	sub, err := js.PullSubscribe("social.comments.*", "social_comments")
 	if err != nil {
 		log.Printf("comments_consumer: subscribe: %v", err)

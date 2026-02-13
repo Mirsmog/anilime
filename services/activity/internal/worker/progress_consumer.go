@@ -34,6 +34,17 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 		return
 	}
 
+	// Ensure stream exists before subscribing.
+	_, err = js.AddStream(&nats.StreamConfig{
+		Name:     "ACTIVITY",
+		Subjects: []string{"activity.progress"},
+		Storage:  nats.FileStorage,
+	})
+	if err != nil && !strings.Contains(err.Error(), "already in use") {
+		log.Printf("progress_consumer: add stream error: %v", err)
+		return
+	}
+
 	sub, err := js.PullSubscribe("activity.progress", "activity_progress")
 	if err != nil {
 		log.Printf("progress_consumer: subscribe error: %v", err)
