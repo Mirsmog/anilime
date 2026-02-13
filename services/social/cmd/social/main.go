@@ -18,11 +18,11 @@ import (
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 	"github.com/example/anime-platform/internal/platform/logging"
+	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
 	"github.com/example/anime-platform/services/social/internal/grpcapi"
 	"github.com/example/anime-platform/services/social/internal/handlers"
 	"github.com/example/anime-platform/services/social/internal/store"
-	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/services/social/internal/worker"
 )
 
