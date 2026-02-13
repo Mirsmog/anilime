@@ -22,6 +22,8 @@ import (
 	"github.com/example/anime-platform/services/social/internal/grpcapi"
 	"github.com/example/anime-platform/services/social/internal/handlers"
 	"github.com/example/anime-platform/services/social/internal/store"
+	"github.com/example/anime-platform/internal/platform/natsconn"
+	"github.com/example/anime-platform/services/social/internal/worker"
 )
 
 func main() {
@@ -87,6 +89,15 @@ func main() {
 
 	runner := run.New(log)
 	code := runner.WithSignals(func(ctx context.Context) error {
+		// start comments consumer (non-fatal if NATS unavailable)
+		nc, err := natsconn.Connect(natsconn.Options{})
+		if err != nil {
+			log.Error("nats connect", zap.Error(err))
+		} else {
+			go worker.StartCommentsConsumer(ctx, nc)
+			defer nc.Close()
+		}
+
 		go func() {
 			<-ctx.Done()
 			stopped := make(chan struct{})

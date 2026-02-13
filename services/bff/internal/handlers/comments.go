@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 
 	socialv1 "github.com/example/anime-platform/gen/social/v1"
@@ -56,6 +58,30 @@ func CreateComment(client socialv1.SocialServiceClient) http.HandlerFunc {
 		var req createCommentReq
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 			api.BadRequest(w, "INVALID_JSON", "invalid JSON", rid, nil)
+			return
+		}
+
+		// Async publish to JetStream if configured
+		if JS != nil && AsyncWrites {
+			uid, _ := auth.UserIDFromContext(r.Context())
+			eventID := uuid.NewString()
+			payload := map[string]interface{}{
+				"event_id":   eventID,
+				"user_id":    uid,
+				"anime_id":   animeID,
+				"body":       req.Body,
+				"created_at": time.Now().UTC().Format(time.RFC3339),
+			}
+			if req.ParentID != nil {
+				payload["parent_id"] = *req.ParentID
+			}
+			b, _ := json.Marshal(payload)
+			if _, err := JS.Publish("social.comments.create", b); err != nil {
+				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+				return
+			}
+			w.Header().Set("X-Event-ID", eventID)
+			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 
@@ -131,6 +157,27 @@ func VoteComment(client socialv1.SocialServiceClient) http.HandlerFunc {
 			return
 		}
 
+		// Async publish
+		if JS != nil && AsyncWrites {
+			uid, _ := auth.UserIDFromContext(r.Context())
+			eventID := uuid.NewString()
+			payload := map[string]interface{}{
+				"event_id":   eventID,
+				"user_id":    uid,
+				"comment_id": commentID,
+				"vote":       req.Vote,
+				"created_at": time.Now().UTC().Format(time.RFC3339),
+			}
+			b, _ := json.Marshal(payload)
+			if _, err := JS.Publish("social.comments.vote", b); err != nil {
+				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+				return
+			}
+			w.Header().Set("X-Event-ID", eventID)
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
 		_, err := client.VoteComment(ctx, &socialv1.VoteCommentRequest{
 			CommentId: commentID,
 			Vote:      req.Vote,
@@ -164,6 +211,27 @@ func UpdateComment(client socialv1.SocialServiceClient) http.HandlerFunc {
 			return
 		}
 
+		// Async publish
+		if JS != nil && AsyncWrites {
+			uid, _ := auth.UserIDFromContext(r.Context())
+			eventID := uuid.NewString()
+			payload := map[string]interface{}{
+				"event_id":   eventID,
+				"user_id":    uid,
+				"comment_id": commentID,
+				"body":       req.Body,
+				"created_at": time.Now().UTC().Format(time.RFC3339),
+			}
+			b, _ := json.Marshal(payload)
+			if _, err := JS.Publish("social.comments.update", b); err != nil {
+				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+				return
+			}
+			w.Header().Set("X-Event-ID", eventID)
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
 		_, err := client.UpdateComment(ctx, &socialv1.UpdateCommentRequest{
 			CommentId: commentID,
 			Body:      req.Body,
@@ -188,6 +256,26 @@ func DeleteComment(client socialv1.SocialServiceClient) http.HandlerFunc {
 		commentID := strings.TrimSpace(chi.URLParam(r, "comment_id"))
 		if commentID == "" {
 			api.BadRequest(w, "MISSING_ID", "comment_id is required", rid, nil)
+			return
+		}
+
+		// Async publish
+		if JS != nil && AsyncWrites {
+			uid, _ := auth.UserIDFromContext(r.Context())
+			eventID := uuid.NewString()
+			payload := map[string]interface{}{
+				"event_id":   eventID,
+				"user_id":    uid,
+				"comment_id": commentID,
+				"created_at": time.Now().UTC().Format(time.RFC3339),
+			}
+			b, _ := json.Marshal(payload)
+			if _, err := JS.Publish("social.comments.delete", b); err != nil {
+				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+				return
+			}
+			w.Header().Set("X-Event-ID", eventID)
+			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 
