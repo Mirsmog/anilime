@@ -1,6 +1,9 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
+// Accept 200, 201, 202, 204 as successful responses (202 = async writes, 204 = deletes)
+http.setResponseCallback(http.expectedStatuses(200, 201, 202, 204));
+
 const BASE_URL = 'http://localhost:8080';
 
 export const options = {
@@ -67,16 +70,18 @@ export default function (data) {
       const episodeId = episodes[0].id;
 
       // Activity progress
-      http.post(`${BASE_URL}/v1/activity/progress`, JSON.stringify({
+      const progressRes = http.post(`${BASE_URL}/v1/activity/progress`, JSON.stringify({
         episode_id: episodeId,
         position_seconds: 120,
         duration_seconds: 1440
       }), { headers: authHeaders });
+      check(progressRes, { 'progress ok': (r) => r.status === 200 || r.status === 202 });
 
       // Comments
-      http.post(`${BASE_URL}/v1/comments/${animeId}`, JSON.stringify({
+      const commentRes = http.post(`${BASE_URL}/v1/comments/${animeId}`, JSON.stringify({
         body: `Load test comment ${__VU}_${__ITER}`
       }), { headers: authHeaders });
+      check(commentRes, { 'comment ok': (r) => r.status === 200 || r.status === 201 || r.status === 202 });
     }
   }
 
