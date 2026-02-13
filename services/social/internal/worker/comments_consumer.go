@@ -101,10 +101,20 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 				continue
 			}
 
-			if len(msgs) == 0 { continue }
+			if len(msgs) == 0 {
+				continue
+			}
 
 			tx, err := pool.Begin(ctx)
-			if err != nil { log.Printf("comments_consumer: db begin: %v", err); for _, m := range msgs { if err := m.Nak(); err != nil { log.Printf("comments_consumer: nak error: %v", err) } }; continue }
+			if err != nil {
+				log.Printf("comments_consumer: db begin: %v", err)
+				for _, m := range msgs {
+					if err := m.Nak(); err != nil {
+						log.Printf("comments_consumer: nak error: %v", err)
+					}
+				}
+				continue
+			}
 
 			failed := false
 			for _, m := range msgs {
@@ -113,28 +123,128 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 				switch action {
 				case "create":
 					var ev CreateCommentEvent
-					if err := json.Unmarshal(m.Data, &ev); err != nil { log.Printf("comments_consumer: invalid create event: %v", err); failed = true; break }
+					if err := json.Unmarshal(m.Data, &ev); err != nil {
+						log.Printf("comments_consumer: invalid create event: %v", err)
+						failed = true
+						break
+					}
 					ct, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id, subject, created_at, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, ev.EventID, "social.comments.create", ev.CreatedAt, m.Data)
-					if err != nil { if strings.Contains(err.Error(), "does not exist") { _ = tx.Rollback(ctx); if err := handleCreate(ctx, pool, &ev); err != nil { log.Printf("comments_consumer: handleCreate fallback: %v", err); failed = true }; if !failed { if err := m.Ack(); err != nil { log.Printf("comments_consumer: ack error: %v", err) } }; tx, err = pool.Begin(ctx); if err != nil { failed = true; break }; continue }; log.Printf("comments_consumer: insert processed_events error: %v", err); failed = true; break }
-					if ct.RowsAffected() == 0 { continue }
-					if _, err := tx.Exec(ctx, `INSERT INTO comments (anime_id, user_id, parent_id, body) VALUES ($1,$2,$3,$4)`, ev.AnimeID, ev.UserID, ev.ParentID, ev.Body); err != nil { log.Printf("comments_consumer: insert comment: %v", err); failed = true; break }
+					if err != nil {
+						if strings.Contains(err.Error(), "does not exist") {
+							_ = tx.Rollback(ctx)
+							if err := handleCreate(ctx, pool, &ev); err != nil {
+								log.Printf("comments_consumer: handleCreate fallback: %v", err)
+								failed = true
+							}
+							if !failed {
+								if err := m.Ack(); err != nil {
+									log.Printf("comments_consumer: ack error: %v", err)
+								}
+							}
+							tx, err = pool.Begin(ctx)
+							if err != nil {
+								failed = true
+								break
+							}
+							continue
+						}
+						log.Printf("comments_consumer: insert processed_events error: %v", err)
+						failed = true
+						break
+					}
+					if ct.RowsAffected() == 0 {
+						continue
+					}
+					if _, err := tx.Exec(ctx, `INSERT INTO comments (anime_id, user_id, parent_id, body) VALUES ($1,$2,$3,$4)`, ev.AnimeID, ev.UserID, ev.ParentID, ev.Body); err != nil {
+						log.Printf("comments_consumer: insert comment: %v", err)
+						failed = true
+						break
+					}
 				case "update":
 					var ev UpdateCommentEvent
-					if err := json.Unmarshal(m.Data, &ev); err != nil { log.Printf("comments_consumer: invalid update event: %v", err); failed = true; break }
+					if err := json.Unmarshal(m.Data, &ev); err != nil {
+						log.Printf("comments_consumer: invalid update event: %v", err)
+						failed = true
+						break
+					}
 					ct, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id, subject, created_at, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, ev.EventID, "social.comments.update", ev.CreatedAt, m.Data)
-					if err != nil { if strings.Contains(err.Error(), "does not exist") { _ = tx.Rollback(ctx); if _, err := pool.Exec(ctx, `UPDATE comments SET body=$1, updated_at=now() WHERE id=$2 AND user_id=$3 AND deleted_at IS NULL`, ev.Body, ev.CommentID, ev.UserID); err != nil { log.Printf("comments_consumer: fallback update: %v", err); failed = true }; if !failed { if err := m.Ack(); err != nil { log.Printf("comments_consumer: ack error: %v", err) } }; tx, err = pool.Begin(ctx); if err != nil { failed = true; break }; continue }; log.Printf("comments_consumer: insert processed_events error: %v", err); failed = true; break }
-					if ct.RowsAffected() == 0 { continue }
-					if _, err := tx.Exec(ctx, `UPDATE comments SET body=$1, updated_at=now() WHERE id=$2 AND user_id=$3 AND deleted_at IS NULL`, ev.Body, ev.CommentID, ev.UserID); err != nil { log.Printf("comments_consumer: update comment: %v", err); failed = true; break }
+					if err != nil {
+						if strings.Contains(err.Error(), "does not exist") {
+							_ = tx.Rollback(ctx)
+							if _, err := pool.Exec(ctx, `UPDATE comments SET body=$1, updated_at=now() WHERE id=$2 AND user_id=$3 AND deleted_at IS NULL`, ev.Body, ev.CommentID, ev.UserID); err != nil {
+								log.Printf("comments_consumer: fallback update: %v", err)
+								failed = true
+							}
+							if !failed {
+								if err := m.Ack(); err != nil {
+									log.Printf("comments_consumer: ack error: %v", err)
+								}
+							}
+							tx, err = pool.Begin(ctx)
+							if err != nil {
+								failed = true
+								break
+							}
+							continue
+						}
+						log.Printf("comments_consumer: insert processed_events error: %v", err)
+						failed = true
+						break
+					}
+					if ct.RowsAffected() == 0 {
+						continue
+					}
+					if _, err := tx.Exec(ctx, `UPDATE comments SET body=$1, updated_at=now() WHERE id=$2 AND user_id=$3 AND deleted_at IS NULL`, ev.Body, ev.CommentID, ev.UserID); err != nil {
+						log.Printf("comments_consumer: update comment: %v", err)
+						failed = true
+						break
+					}
 				case "delete":
 					var ev DeleteCommentEvent
-					if err := json.Unmarshal(m.Data, &ev); err != nil { log.Printf("comments_consumer: invalid delete event: %v", err); failed = true; break }
+					if err := json.Unmarshal(m.Data, &ev); err != nil {
+						log.Printf("comments_consumer: invalid delete event: %v", err)
+						failed = true
+						break
+					}
 					ct, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id, subject, created_at, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, ev.EventID, "social.comments.delete", ev.CreatedAt, m.Data)
-					if err != nil { if strings.Contains(err.Error(), "does not exist") { _ = tx.Rollback(ctx); if _, err := pool.Exec(ctx, `UPDATE comments SET body='[deleted]', deleted_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, ev.CommentID, ev.UserID); err != nil { log.Printf("comments_consumer: fallback delete: %v", err); failed = true }; if !failed { if err := m.Ack(); err != nil { log.Printf("comments_consumer: ack error: %v", err) } }; tx, err = pool.Begin(ctx); if err != nil { failed = true; break }; continue }; log.Printf("comments_consumer: insert processed_events error: %v", err); failed = true; break }
-					if ct.RowsAffected() == 0 { continue }
-					if _, err := tx.Exec(ctx, `UPDATE comments SET body='[deleted]', deleted_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, ev.CommentID, ev.UserID); err != nil { log.Printf("comments_consumer: delete comment: %v", err); failed = true; break }
+					if err != nil {
+						if strings.Contains(err.Error(), "does not exist") {
+							_ = tx.Rollback(ctx)
+							if _, err := pool.Exec(ctx, `UPDATE comments SET body='[deleted]', deleted_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, ev.CommentID, ev.UserID); err != nil {
+								log.Printf("comments_consumer: fallback delete: %v", err)
+								failed = true
+							}
+							if !failed {
+								if err := m.Ack(); err != nil {
+									log.Printf("comments_consumer: ack error: %v", err)
+								}
+							}
+							tx, err = pool.Begin(ctx)
+							if err != nil {
+								failed = true
+								break
+							}
+							continue
+						}
+						log.Printf("comments_consumer: insert processed_events error: %v", err)
+						failed = true
+						break
+					}
+					if ct.RowsAffected() == 0 {
+						continue
+					}
+					if _, err := tx.Exec(ctx, `UPDATE comments SET body='[deleted]', deleted_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`, ev.CommentID, ev.UserID); err != nil {
+						log.Printf("comments_consumer: delete comment: %v", err)
+						failed = true
+						break
+					}
 				case "vote":
 					var ev VoteCommentEvent
-					if err := json.Unmarshal(m.Data, &ev); err != nil { log.Printf("comments_consumer: invalid vote event: %v", err); failed = true; break }
+					if err := json.Unmarshal(m.Data, &ev); err != nil {
+						log.Printf("comments_consumer: invalid vote event: %v", err)
+						failed = true
+						break
+					}
 					ct, err := tx.Exec(ctx, `INSERT INTO processed_events (event_id, subject, created_at, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, ev.EventID, "social.comments.vote", ev.CreatedAt, m.Data)
 					if err != nil {
 						if strings.Contains(err.Error(), "does not exist") {
@@ -258,7 +368,9 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 			if failed {
 				_ = tx.Rollback(ctx)
 				for _, m := range msgs {
-					if err := m.Nak(); err != nil { log.Printf("comments_consumer: nak error: %v", err) }
+					if err := m.Nak(); err != nil {
+						log.Printf("comments_consumer: nak error: %v", err)
+					}
 				}
 				continue
 			}
@@ -266,13 +378,17 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 			if err := tx.Commit(ctx); err != nil {
 				log.Printf("comments_consumer: commit failed: %v", err)
 				for _, m := range msgs {
-					if err := m.Nak(); err != nil { log.Printf("comments_consumer: nak error: %v", err) }
+					if err := m.Nak(); err != nil {
+						log.Printf("comments_consumer: nak error: %v", err)
+					}
 				}
 				continue
 			}
 
 			for _, m := range msgs {
-				if err := m.Ack(); err != nil { log.Printf("comments_consumer: ack error: %v", err) }
+				if err := m.Ack(); err != nil {
+					log.Printf("comments_consumer: ack error: %v", err)
+				}
 			}
 		}
 	}()
