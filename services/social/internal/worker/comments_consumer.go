@@ -93,9 +93,9 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 		log.Printf("comments_consumer: pgxpool.New: %v", err)
 		return
 	}
-	defer pool.Close()
 
 	go func() {
+		defer pool.Close()
 		batchSize := envInt("WORKER_BATCH_SIZE", 100)
 		batchInterval := envInt("WORKER_BATCH_INTERVAL_MS", 2000)
 		for {
