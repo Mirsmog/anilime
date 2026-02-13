@@ -76,16 +76,19 @@ func StartCommentsConsumer(ctx context.Context, nc *nats.Conn) {
 	}
 
 	// Create DB pool from DATABASE_URL
-	dsn := strings.TrimSpace("")
-	if dsn == "" {
-		// read from env
-		dsn = strings.TrimSpace(getenv("DATABASE_URL"))
-	}
+	dsn := strings.TrimSpace(getenv("DATABASE_URL"))
 	if dsn == "" {
 		log.Printf("comments_consumer: DATABASE_URL not set")
 		return
 	}
-	pool, err := pgxpool.New(context.Background(), dsn)
+	poolCfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		log.Printf("comments_consumer: parse config: %v", err)
+		return
+	}
+	poolCfg.MaxConns = 25
+	poolCfg.MinConns = 5
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
 		log.Printf("comments_consumer: pgxpool.New: %v", err)
 		return
