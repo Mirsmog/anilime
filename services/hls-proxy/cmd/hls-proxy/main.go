@@ -34,16 +34,20 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hls", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Range")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
 		w.Header().Set("Access-Control-Max-Age", "3600")
+		
+		// Handle preflight FIRST
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		
 		rawURL, uid, exp, sig, err := signing.ExtractSigned(r.URL.Query())
 		if err != nil {
 			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if !s.Verify(rawURL, uid, exp, sig) {
@@ -51,12 +55,23 @@ func main() {
 			return
 		}
 
+		// Extract custom headers from signed URL
+		customHeaders := signing.ExtractHeaders(r.URL.Query())
+
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
 		if err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		applyHiAnimeHeaders(req)
+		
+		// Apply custom headers from provider first, then fallback headers
+		if len(customHeaders) > 0 {
+			for k, v := range customHeaders {
+				req.Header.Set(k, v)
+			}
+		} else {
+			applyHiAnimeHeaders(req)
+		}
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -66,21 +81,52 @@ func main() {
 		defer resp.Body.Close()
 
 		contentType := resp.Header.Get("Content-Type")
-		if strings.Contains(contentType, "application/vnd.apple.mpegurl") || strings.Contains(contentType, "application/x-mpegurl") || strings.Contains(contentType, "audio/mpegurl") || strings.Contains(contentType, "application/x-mpegURL") || strings.Contains(contentType, "audio/x-mpegurl") {
+		isM3U8 := strings.Contains(contentType, "application/vnd.apple.mpegurl") || 
+			strings.Contains(contentType, "application/x-mpegurl") || 
+			strings.Contains(contentType, "audio/mpegurl") || 
+			strings.Contains(contentType, "application/x-mpegURL") || 
+			strings.Contains(contentType, "audio/x-mpegurl") ||
+			strings.HasSuffix(strings.ToLower(rawURL), ".m3u8") ||
+			strings.HasSuffix(strings.ToLower(rawURL), ".m3u")
+		
+		if isM3U8 {
 			data, err := io.ReadAll(resp.Body)
 			if err != nil {
 				http.Error(w, "upstream", http.StatusBadGateway)
 				return
 			}
-			proxyBase := r.URL.Scheme + "://" + r.Host + "/hls"
-			body := rewriter.RewriteM3U8(string(data), rawURL, proxyBase)
+			
+			// Build proxy base URL with scheme
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			if fwdProto := r.Header.Get("X-Forwarded-Proto"); fwdProto != "" {
+				scheme = fwdProto
+			}
+			proxyBase := scheme + "://" + r.Host + "/hls"
+			
+			// Pass signing params to rewriter for re-signing URLs
+			signingParams := rewriter.SigningParams{
+				Secret: cfg.SigningSecret,
+				UID:    uid,
+				Exp:    r.URL.Query().Get("exp"),
+				Hdr:    r.URL.Query().Get("hdr"),
+			}
+			
+			body := rewriter.RewriteM3U8(string(data), rawURL, proxyBase, signingParams)
 			w.Header().Set("Content-Type", contentType)
 			w.WriteHeader(resp.StatusCode)
 			_, _ = w.Write([]byte(body))
 			return
 		}
 
+		// Copy headers from upstream but skip CORS headers (we set our own)
 		for k, vals := range resp.Header {
+			kLower := strings.ToLower(k)
+			if strings.HasPrefix(kLower, "access-control-") {
+				continue // Skip upstream CORS headers
+			}
 			for _, v := range vals {
 				w.Header().Add(k, v)
 			}

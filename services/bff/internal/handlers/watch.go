@@ -55,7 +55,14 @@ func Watch(client streamingv1.StreamingResolverServiceClient, hlsBase, hlsSecret
 
 		primary := resp.GetSources()[0].GetUrl()
 		s := signing.New(hlsSecret)
-		signed := s.Sign(primary, uid, time.Now().Add(15*time.Minute))
+		
+		// Get headers from streaming response
+		var hdrs map[string]string
+		if h := resp.GetHeaders(); h != nil {
+			hdrs = h.GetHeaders()
+		}
+		
+		signed := s.SignWithHeaders(primary, uid, time.Now().Add(15*time.Minute), hdrs)
 		url, err := signing.BuildSignedURL(hlsBase+"/hls", signed)
 		if err != nil {
 			api.Internal(w, rid)

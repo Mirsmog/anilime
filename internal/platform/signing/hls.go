@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -16,10 +17,11 @@ type Signer struct {
 }
 
 type Signed struct {
-	URL string
-	Exp int64
-	UID string
-	Sig string
+	URL     string
+	Exp     int64
+	UID     string
+	Sig     string
+	Headers map[string]string
 }
 
 func New(secret string) *Signer {
@@ -29,6 +31,11 @@ func New(secret string) *Signer {
 func (s *Signer) Sign(rawURL, userID string, exp time.Time) Signed {
 	sig := s.signValue(rawURL, userID, exp.Unix())
 	return Signed{URL: rawURL, Exp: exp.Unix(), UID: userID, Sig: sig}
+}
+
+func (s *Signer) SignWithHeaders(rawURL, userID string, exp time.Time, headers map[string]string) Signed {
+	sig := s.signValue(rawURL, userID, exp.Unix())
+	return Signed{URL: rawURL, Exp: exp.Unix(), UID: userID, Sig: sig, Headers: headers}
 }
 
 func (s *Signer) Verify(rawURL, userID string, exp int64, sig string) bool {
@@ -58,6 +65,10 @@ func BuildSignedURL(base string, signed Signed) (string, error) {
 	q.Set("exp", strconv.FormatInt(signed.Exp, 10))
 	q.Set("uid", signed.UID)
 	q.Set("sig", signed.Sig)
+	if len(signed.Headers) > 0 {
+		hdrJSON, _ := json.Marshal(signed.Headers)
+		q.Set("hdr", base64.RawURLEncoding.EncodeToString(hdrJSON))
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
@@ -75,4 +86,20 @@ func ExtractSigned(query url.Values) (string, string, int64, string, error) {
 		return "", "", 0, "", err
 	}
 	return rawURL, uid, exp, sig, nil
+}
+
+func ExtractHeaders(query url.Values) map[string]string {
+	hdrB64 := strings.TrimSpace(query.Get("hdr"))
+	if hdrB64 == "" {
+		return nil
+	}
+	hdrJSON, err := base64.RawURLEncoding.DecodeString(hdrB64)
+	if err != nil {
+		return nil
+	}
+	var hdrs map[string]string
+	if err := json.Unmarshal(hdrJSON, &hdrs); err != nil {
+		return nil
+	}
+	return hdrs
 }
