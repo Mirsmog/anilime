@@ -38,13 +38,13 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Range")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
 		w.Header().Set("Access-Control-Max-Age", "3600")
-		
+
 		// Handle preflight FIRST
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		
+
 		rawURL, uid, exp, sig, err := signing.ExtractSigned(r.URL.Query())
 		if err != nil {
 			http.Error(w, "forbidden", http.StatusForbidden)
@@ -63,7 +63,7 @@ func main() {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		
+
 		// Apply custom headers from provider first, then fallback headers
 		if len(customHeaders) > 0 {
 			for k, v := range customHeaders {
@@ -81,21 +81,21 @@ func main() {
 		defer resp.Body.Close()
 
 		contentType := resp.Header.Get("Content-Type")
-		isM3U8 := strings.Contains(contentType, "application/vnd.apple.mpegurl") || 
-			strings.Contains(contentType, "application/x-mpegurl") || 
-			strings.Contains(contentType, "audio/mpegurl") || 
-			strings.Contains(contentType, "application/x-mpegURL") || 
+		isM3U8 := strings.Contains(contentType, "application/vnd.apple.mpegurl") ||
+			strings.Contains(contentType, "application/x-mpegurl") ||
+			strings.Contains(contentType, "audio/mpegurl") ||
+			strings.Contains(contentType, "application/x-mpegURL") ||
 			strings.Contains(contentType, "audio/x-mpegurl") ||
 			strings.HasSuffix(strings.ToLower(rawURL), ".m3u8") ||
 			strings.HasSuffix(strings.ToLower(rawURL), ".m3u")
-		
+
 		if isM3U8 {
 			data, err := io.ReadAll(resp.Body)
 			if err != nil {
 				http.Error(w, "upstream", http.StatusBadGateway)
 				return
 			}
-			
+
 			// Build proxy base URL with scheme
 			scheme := "http"
 			if r.TLS != nil {
@@ -105,7 +105,7 @@ func main() {
 				scheme = fwdProto
 			}
 			proxyBase := scheme + "://" + r.Host + "/hls"
-			
+
 			// Pass signing params to rewriter for re-signing URLs
 			signingParams := rewriter.SigningParams{
 				Secret: cfg.SigningSecret,
@@ -113,7 +113,7 @@ func main() {
 				Exp:    r.URL.Query().Get("exp"),
 				Hdr:    r.URL.Query().Get("hdr"),
 			}
-			
+
 			body := rewriter.RewriteM3U8(string(data), rawURL, proxyBase, signingParams)
 			w.Header().Set("Content-Type", contentType)
 			w.WriteHeader(resp.StatusCode)
