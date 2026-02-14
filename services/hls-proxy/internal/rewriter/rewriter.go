@@ -40,7 +40,7 @@ func RewriteM3U8(body string, baseURL string, proxyBase string, params SigningPa
 func buildProxyURL(proxyBase, targetURL string, params SigningParams) string {
 	// Generate new signature for this specific URL
 	sig := signURL(targetURL, params.UID, params.Exp, params.Secret)
-	
+
 	result := fmt.Sprintf("%s?url=%s&exp=%s&uid=%s&sig=%s",
 		proxyBase,
 		url.QueryEscape(targetURL),
