@@ -88,6 +88,9 @@ services:
       LOG_LEVEL: debug
       HTTP_ADDR: :8084
       HLS_SIGNING_SECRET: ${HLS_SIGNING_SECRET}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
     ports:
       - "8084:8084"
 
@@ -106,7 +109,7 @@ services:
       SEARCH_GRPC_ADDR: search:9094
       STREAMING_GRPC_ADDR: streaming-resolver:9095
       SOCIAL_GRPC_ADDR: social:9096
-      HLS_PROXY_BASE_URL: http://hls-proxy:8084
+      HLS_PROXY_BASE_URL: http://localhost:8084
       HLS_SIGNING_SECRET: ${HLS_SIGNING_SECRET}
       NATS_URL: nats://nats:4222
       JIKAN_BASE_URL: https://api.jikan.moe/v4
