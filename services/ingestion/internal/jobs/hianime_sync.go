@@ -12,9 +12,9 @@ import (
 )
 
 type HiAnimeSync struct {
-	HiAnime *hianime.Client
+	HiAnime hianime.Provider
 	Catalog catalogv1.CatalogServiceClient
-	Jikan   *jikan.Client
+	Jikan   jikan.Provider
 }
 
 // SyncEpisodesByMALID finds HiAnime slug by search+malId verification and upserts episodes in Catalog.
@@ -38,14 +38,12 @@ func (j HiAnimeSync) SyncEpisodesByMALID(ctx context.Context, malID int, queryTi
 		}
 	}
 
-	// 1) resolve internal anime_id by MAL mapping
 	res, err := j.Catalog.ResolveAnimeIDByExternalID(ctx, &catalogv1.ResolveAnimeIDByExternalIDRequest{Provider: "mal", ExternalId: strconv.Itoa(malID)})
 	if err != nil {
 		return "", "", nil, err
 	}
 	animeID = res.GetAnimeId()
 
-	// 2) search
 	search, err := j.HiAnime.Search(ctx, queryTitle, 1)
 	if err != nil {
 		return animeID, "", nil, err
@@ -54,7 +52,7 @@ func (j HiAnimeSync) SyncEpisodesByMALID(ctx context.Context, malID int, queryTi
 		return animeID, "", nil, fmt.Errorf("no results for %q", queryTitle)
 	}
 
-	// 3) pick first slug that matches malId
+	// Scan up to 15 candidates; verify malID match via full anime fetch to avoid title collisions.
 	for i, a := range search.Data.Animes {
 		if i >= 15 {
 			break
@@ -76,13 +74,11 @@ func (j HiAnimeSync) SyncEpisodesByMALID(ctx context.Context, malID int, queryTi
 		return animeID, "", nil, fmt.Errorf("no hianime slug matched malId=%d", malID)
 	}
 
-	// 4) episodes
 	eps, err := j.HiAnime.GetEpisodes(ctx, slug)
 	if err != nil {
 		return animeID, slug, nil, err
 	}
 
-	// 5) upsert episodes into catalog
 	pbEpisodes := make([]*catalogv1.HiAnimeEpisode, 0, len(eps.Data.Episodes))
 	for _, e := range eps.Data.Episodes {
 		id := strings.TrimSpace(e.EpisodeID)

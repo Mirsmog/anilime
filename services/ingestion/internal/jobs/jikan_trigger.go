@@ -17,7 +17,7 @@ import (
 
 type JikanTrigger struct {
 	Log     *zap.Logger
-	Jikan   *jikan.Client
+	Jikan   jikan.Provider
 	Catalog catalogv1.CatalogServiceClient
 }
 
@@ -53,7 +53,7 @@ func (t JikanTrigger) Register(r chi.Router) {
 }
 
 // TitleByMALID helper used by other jobs.
-func TitleByMALID(ctx context.Context, c *jikan.Client, malID int) (string, error) {
+func TitleByMALID(ctx context.Context, c jikan.Provider, malID int) (string, error) {
 	resp, err := c.GetAnime(ctx, malID)
 	if err != nil {
 		return "", err

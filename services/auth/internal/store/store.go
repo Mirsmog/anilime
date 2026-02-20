@@ -21,7 +21,20 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
 
-type Store struct {
+// Store is the port for all auth persistence operations.
+type Store interface {
+	CreateUser(ctx context.Context, p CreateUserParams) (domain.User, error)
+	FindUserByLogin(ctx context.Context, login string) (UserRow, error)
+	GetUserByID(ctx context.Context, userID string) (domain.User, error)
+	SetUserRoleByID(ctx context.Context, userID uuid.UUID, role string) error
+	CreateRefreshSession(ctx context.Context, p CreateRefreshSessionParams) error
+	GetRefreshSessionByHash(ctx context.Context, tokenHash string) (RefreshSession, error)
+	RevokeRefreshSession(ctx context.Context, sessionID uuid.UUID, now time.Time) error
+	ReplaceRefreshSession(ctx context.Context, oldID, newID uuid.UUID, now time.Time) error
+}
+
+// PostgresStore is the production Postgres-backed implementation of Store.
+type PostgresStore struct {
 	DB *pgxpool.Pool
 }
 
@@ -31,7 +44,7 @@ type CreateUserParams struct {
 	PasswordHash string
 }
 
-func (s Store) CreateUser(ctx context.Context, p CreateUserParams) (domain.User, error) {
+func (s PostgresStore) CreateUser(ctx context.Context, p CreateUserParams) (domain.User, error) {
 	id := uuid.New()
 	var u domain.User
 	q := `
@@ -58,7 +71,7 @@ type UserRow struct {
 	PasswordHash string
 }
 
-func (s Store) FindUserByLogin(ctx context.Context, login string) (UserRow, error) {
+func (s PostgresStore) FindUserByLogin(ctx context.Context, login string) (UserRow, error) {
 	login = strings.TrimSpace(login)
 	if login == "" {
 		return UserRow{}, ErrNotFound
@@ -91,7 +104,7 @@ type CreateRefreshSessionParams struct {
 	Now       time.Time
 }
 
-func (s Store) CreateRefreshSession(ctx context.Context, p CreateRefreshSessionParams) error {
+func (s PostgresStore) CreateRefreshSession(ctx context.Context, p CreateRefreshSessionParams) error {
 	q := `
 INSERT INTO refresh_sessions (id, user_id, token_hash, expires_at, created_at, user_agent, ip)
 VALUES ($1, $2, $3, $4, $5, $6, $7);
@@ -117,7 +130,7 @@ type RefreshSession struct {
 	RevokedAt *time.Time
 }
 
-func (s Store) GetRefreshSessionByHash(ctx context.Context, tokenHash string) (RefreshSession, error) {
+func (s PostgresStore) GetRefreshSessionByHash(ctx context.Context, tokenHash string) (RefreshSession, error) {
 	q := `
 SELECT id, user_id, token_hash, expires_at, revoked_at
 FROM refresh_sessions
@@ -135,13 +148,13 @@ LIMIT 1;
 	return rs, nil
 }
 
-func (s Store) RevokeRefreshSession(ctx context.Context, sessionID uuid.UUID, now time.Time) error {
+func (s PostgresStore) RevokeRefreshSession(ctx context.Context, sessionID uuid.UUID, now time.Time) error {
 	q := `UPDATE refresh_sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;`
 	_, err := s.DB.Exec(ctx, q, sessionID, now)
 	return err
 }
 
-func (s Store) ReplaceRefreshSession(ctx context.Context, oldID, newID uuid.UUID, now time.Time) error {
+func (s PostgresStore) ReplaceRefreshSession(ctx context.Context, oldID, newID uuid.UUID, now time.Time) error {
 	q := `UPDATE refresh_sessions SET revoked_at = $3, replaced_by_session_id = $2 WHERE id = $1 AND revoked_at IS NULL;`
 	_, err := s.DB.Exec(ctx, q, oldID, newID, now)
 	return err

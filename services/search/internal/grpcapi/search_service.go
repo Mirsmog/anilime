@@ -15,7 +15,7 @@ import (
 
 type SearchService struct {
 	searchv1.UnimplementedSearchServiceServer
-	Meili *meili.Client
+	Meili meili.Searcher
 }
 
 type meiliAnime struct {

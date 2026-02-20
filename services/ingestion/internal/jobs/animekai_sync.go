@@ -10,7 +10,7 @@ import (
 )
 
 type AnimeKaiSync struct {
-	AnimeKai *animekai.Client
+	AnimeKai animekai.Provider
 	Catalog  catalogv1.CatalogServiceClient
 }
 

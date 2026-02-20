@@ -179,7 +179,6 @@ func ContinueWatching(activity activityv1.ActivityServiceClient, catalog catalog
 	}
 }
 
-// fetchEpisodesConcurrently splits ids into chunks and fetches them in parallel.
 func fetchEpisodesConcurrently(ctx context.Context, catalog catalogv1.CatalogServiceClient, ids []string, chunkSize int) ([]*catalogv1.Episode, error) {
 	if len(ids) == 0 {
 		return nil, nil

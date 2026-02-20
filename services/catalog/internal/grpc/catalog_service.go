@@ -2,108 +2,19 @@ package grpcapi
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
+	"github.com/example/anime-platform/services/catalog/internal/store"
 )
 
 type CatalogService struct {
 	catalogv1.UnimplementedCatalogServiceServer
-	DB *pgxpool.Pool
-}
-
-const (
-	catalogEventAnimeUpserted = "catalog.anime.upserted"
-)
-
-const qSelectAnimeIDByExternal = `SELECT anime_id FROM external_anime_ids WHERE provider=$1 AND provider_anime_id=$2`
-
-func (s *CatalogService) insertOutboxEvent(ctx context.Context, tx pgx.Tx, eventType string, payload any) error {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO catalog_outbox (id, event_type, payload) VALUES ($1,$2,$3)`, uuid.New(), eventType, b)
-	return err
-}
-
-// episodeInput is a common structure for upserting an episode from any provider.
-type episodeInput struct {
-	providerEpisodeID string
-	number            int32
-	title             string
-	url               string
-	isFiller          bool
-	hasIsFiller       bool // true если поле is_filler задано (hianime)
-}
-
-func writeEpisode(ctx context.Context, tx pgx.Tx, episodeID uuid.UUID, animeID uuid.UUID, ep episodeInput, now time.Time, insert bool) error {
-	var (
-		query string
-		args  []any
-	)
-
-	switch {
-	case insert && ep.hasIsFiller:
-		query = `INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at) VALUES ($1,$2,$3,$4,'',$5,$6)`
-		args = []any{episodeID, animeID, ep.number, ep.title, ep.isFiller, now}
-	case insert:
-		query = `INSERT INTO episodes (id, anime_id, number, title, url, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`
-		args = []any{episodeID, animeID, ep.number, ep.title, ep.url, now}
-	case ep.hasIsFiller:
-		query = `UPDATE episodes SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6 WHERE id=$1`
-		args = []any{episodeID, animeID, ep.number, ep.title, ep.isFiller, now}
-	default:
-		query = `UPDATE episodes SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6 WHERE id=$1`
-		args = []any{episodeID, animeID, ep.number, ep.title, ep.url, now}
-	}
-
-	if _, err := tx.Exec(ctx, query, args...); err != nil {
-		return status.Error(codes.Internal, "db")
-	}
-	return nil
-}
-
-func upsertEpisodes(ctx context.Context, tx pgx.Tx, provider string, animeID uuid.UUID, episodes []episodeInput, now time.Time) ([]string, error) {
-	episodeIDs := make([]string, 0, len(episodes))
-	for _, ep := range episodes {
-		if ep.providerEpisodeID == "" {
-			continue
-		}
-
-		var episodeID uuid.UUID
-		qFind := `SELECT episode_id FROM external_episode_ids WHERE provider=$1 AND provider_episode_id=$2`
-		err := tx.QueryRow(ctx, qFind, provider, ep.providerEpisodeID).Scan(&episodeID)
-		if err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return nil, status.Error(codes.Internal, "db")
-			}
-			episodeID = uuid.New()
-			if err := writeEpisode(ctx, tx, episodeID, animeID, ep, now, true); err != nil {
-				return nil, err
-			}
-			qInsMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
-			if _, err := tx.Exec(ctx, qInsMap, provider, ep.providerEpisodeID, episodeID); err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		} else {
-			if err := writeEpisode(ctx, tx, episodeID, animeID, ep, now, false); err != nil {
-				return nil, err
-			}
-		}
-		episodeIDs = append(episodeIDs, episodeID.String())
-	}
-	return episodeIDs, nil
+	Store store.CatalogStore
 }
 
 func (s *CatalogService) GetEpisodesByAnimeID(ctx context.Context, req *catalogv1.GetEpisodesByAnimeIDRequest) (*catalogv1.GetEpisodesByAnimeIDResponse, error) {
@@ -111,177 +22,75 @@ func (s *CatalogService) GetEpisodesByAnimeID(ctx context.Context, req *catalogv
 	if animeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "anime_id is required")
 	}
-
-	q := `
-SELECT id, anime_id, number, title, aired_at
-FROM episodes
-WHERE anime_id = $1::uuid
-ORDER BY number ASC
-`
-	rows, err := s.DB.Query(ctx, q, animeID)
+	eps, err := s.Store.GetEpisodesByAnimeID(ctx, animeID)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db query")
+		return nil, err
 	}
-	defer rows.Close()
-
-	resp := &catalogv1.GetEpisodesByAnimeIDResponse{}
-	for rows.Next() {
-		var (
-			id, aID, title string
-			number         int32
-			airedAt        *time.Time
-		)
-		if err := rows.Scan(&id, &aID, &number, &title, &airedAt); err != nil {
-			return nil, status.Error(codes.Internal, "db scan")
-		}
-		pb := &catalogv1.Episode{Id: id, AnimeId: aID, Number: number, Title: title}
-		if airedAt != nil {
-			pb.AiredAtRfc3339 = airedAt.UTC().Format(time.RFC3339)
-		}
-		resp.Episodes = append(resp.Episodes, pb)
-	}
-	return resp, nil
+	return &catalogv1.GetEpisodesByAnimeIDResponse{Episodes: episodesToProto(eps)}, nil
 }
 
 func (s *CatalogService) GetEpisodesByIDs(ctx context.Context, req *catalogv1.GetEpisodesByIDsRequest) (*catalogv1.GetEpisodesByIDsResponse, error) {
-	ids := req.GetEpisodeIds()
-	if len(ids) == 0 {
-		return &catalogv1.GetEpisodesByIDsResponse{Episodes: nil}, nil
-	}
-
-	q := `
-SELECT id, anime_id, number, title, aired_at
-FROM episodes
-WHERE id = ANY($1::uuid[])
-`
-
-	rows, err := s.DB.Query(ctx, q, ids)
+	eps, err := s.Store.GetEpisodesByIDs(ctx, req.GetEpisodeIds())
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db query")
+		return nil, err
 	}
-	defer rows.Close()
-
-	resp := &catalogv1.GetEpisodesByIDsResponse{}
-	for rows.Next() {
-		var (
-			id, animeID, title string
-			number             int32
-			airedAt            *time.Time
-		)
-		if err := rows.Scan(&id, &animeID, &number, &title, &airedAt); err != nil {
-			return nil, status.Error(codes.Internal, "db scan")
-		}
-		pb := &catalogv1.Episode{Id: id, AnimeId: animeID, Number: number, Title: title}
-		if airedAt != nil {
-			pb.AiredAtRfc3339 = airedAt.UTC().Format(time.RFC3339)
-		}
-		resp.Episodes = append(resp.Episodes, pb)
-	}
-	return resp, nil
+	return &catalogv1.GetEpisodesByIDsResponse{Episodes: episodesToProto(eps)}, nil
 }
 
 func (s *CatalogService) GetProviderEpisodeID(ctx context.Context, req *catalogv1.GetProviderEpisodeIDRequest) (*catalogv1.GetProviderEpisodeIDResponse, error) {
-	episodeID := strings.TrimSpace(req.GetEpisodeId())
+	epID := strings.TrimSpace(req.GetEpisodeId())
 	provider := strings.TrimSpace(req.GetProvider())
-	if episodeID == "" || provider == "" {
+	if epID == "" || provider == "" {
 		return nil, status.Error(codes.InvalidArgument, "episode_id and provider required")
 	}
-
-	var providerEpisodeID string
-	err := s.DB.QueryRow(ctx, `SELECT provider_episode_id FROM external_episode_ids WHERE episode_id = $1::uuid AND provider = $2 ORDER BY provider_episode_id ASC LIMIT 1`, episodeID, provider).Scan(&providerEpisodeID)
+	id, err := s.Store.GetProviderEpisodeID(ctx, epID, provider)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, status.Error(codes.NotFound, "provider episode not found")
-		}
-		return nil, status.Error(codes.Internal, "db query")
+		return nil, err
 	}
-	return &catalogv1.GetProviderEpisodeIDResponse{ProviderEpisodeId: providerEpisodeID}, nil
+	return &catalogv1.GetProviderEpisodeIDResponse{ProviderEpisodeId: id}, nil
 }
 
 func (s *CatalogService) GetAnimeIDs(ctx context.Context, _ *catalogv1.GetAnimeIDsRequest) (*catalogv1.GetAnimeIDsResponse, error) {
-	rows, err := s.DB.Query(ctx, `SELECT id FROM anime ORDER BY updated_at DESC`)
+	ids, err := s.Store.GetAllAnimeIDs(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db query")
+		return nil, err
 	}
-	defer rows.Close()
-
-	resp := &catalogv1.GetAnimeIDsResponse{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, status.Error(codes.Internal, "db scan")
-		}
-		resp.AnimeIds = append(resp.AnimeIds, id)
-	}
-	return resp, nil
+	return &catalogv1.GetAnimeIDsResponse{AnimeIds: ids}, nil
 }
 
 func (s *CatalogService) GetAnimeByIDs(ctx context.Context, req *catalogv1.GetAnimeByIDsRequest) (*catalogv1.GetAnimeByIDsResponse, error) {
-	ids := req.GetAnimeIds()
-	if len(ids) == 0 {
-		return &catalogv1.GetAnimeByIDsResponse{Anime: nil}, nil
-	}
-
-	q := `
-SELECT id, title, title_english, title_japanese, image, description, genres, score, status, type, total_episodes
-FROM anime
-WHERE id = ANY($1::uuid[])
-`
-	rows, err := s.DB.Query(ctx, q, ids)
+	animes, err := s.Store.GetAnimeByIDs(ctx, req.GetAnimeIds())
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db query")
+		return nil, err
 	}
-	defer rows.Close()
-
 	resp := &catalogv1.GetAnimeByIDsResponse{}
-	for rows.Next() {
-		var (
-			id, title, titleEnglish, titleJapanese, image, description, animeStatus, animeType string
-			genresJSON                                                                         []byte
-			score                                                                              float32
-			totalEpisodes                                                                      int32
-		)
-		if err := rows.Scan(&id, &title, &titleEnglish, &titleJapanese, &image, &description, &genresJSON, &score, &animeStatus, &animeType, &totalEpisodes); err != nil {
-			return nil, status.Error(codes.Internal, "db scan")
-		}
-		var genres []string
-		_ = json.Unmarshal(genresJSON, &genres)
+	for _, a := range animes {
 		resp.Anime = append(resp.Anime, &catalogv1.Anime{
-			Id:            id,
-			Title:         title,
-			TitleEnglish:  titleEnglish,
-			TitleJapanese: titleJapanese,
-			Image:         image,
-			Description:   description,
-			Genres:        genres,
-			Score:         score,
-			Status:        animeStatus,
-			Type:          animeType,
-			TotalEpisodes: totalEpisodes,
+			Id:            a.ID,
+			Title:         a.Title,
+			TitleEnglish:  a.TitleEnglish,
+			TitleJapanese: a.TitleJapanese,
+			Image:         a.Image,
+			Description:   a.Description,
+			Genres:        a.Genres,
+			Score:         a.Score,
+			Status:        a.Status,
+			Type:          a.Type,
+			TotalEpisodes: a.TotalEpisodes,
 		})
 	}
 	return resp, nil
 }
 
 func (s *CatalogService) AttachExternalAnimeID(ctx context.Context, req *catalogv1.AttachExternalAnimeIDRequest) (*catalogv1.AttachExternalAnimeIDResponse, error) {
-	animeID, err := uuid.Parse(strings.TrimSpace(req.GetAnimeId()))
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid anime_id")
-	}
+	animeID := strings.TrimSpace(req.GetAnimeId())
 	provider := strings.TrimSpace(req.GetProvider())
 	externalID := strings.TrimSpace(req.GetExternalId())
-	if provider == "" || externalID == "" {
-		return nil, status.Error(codes.InvalidArgument, "provider and external_id are required")
+	if animeID == "" || provider == "" || externalID == "" {
+		return nil, status.Error(codes.InvalidArgument, "anime_id, provider and external_id are required")
 	}
-
-	q := `
-INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id)
-VALUES ($1,$2,$3)
-ON CONFLICT (provider, provider_anime_id)
-DO UPDATE SET anime_id = EXCLUDED.anime_id;
-`
-	if _, err := s.DB.Exec(ctx, q, provider, externalID, animeID); err != nil {
-		return nil, status.Error(codes.Internal, "db")
+	if err := s.Store.AttachExternalAnimeID(ctx, provider, externalID, animeID); err != nil {
+		return nil, err
 	}
 	return &catalogv1.AttachExternalAnimeIDResponse{}, nil
 }
@@ -292,74 +101,42 @@ func (s *CatalogService) ResolveAnimeIDByExternalID(ctx context.Context, req *ca
 	if provider == "" || externalID == "" {
 		return nil, status.Error(codes.InvalidArgument, "provider and external_id are required")
 	}
-
-	var animeID uuid.UUID
-	q := qSelectAnimeIDByExternal
-	if err := s.DB.QueryRow(ctx, q, provider, externalID).Scan(&animeID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, status.Error(codes.NotFound, "not found")
-		}
-		return nil, status.Error(codes.Internal, "db")
+	id, err := s.Store.ResolveAnimeIDByExternalID(ctx, provider, externalID)
+	if err != nil {
+		return nil, err
 	}
-	return &catalogv1.ResolveAnimeIDByExternalIDResponse{AnimeId: animeID.String()}, nil
+	return &catalogv1.ResolveAnimeIDByExternalIDResponse{AnimeId: id}, nil
 }
 
 func (s *CatalogService) UpsertHiAnimeEpisodes(ctx context.Context, req *catalogv1.UpsertHiAnimeEpisodesRequest) (*catalogv1.UpsertHiAnimeEpisodesResponse, error) {
-	const provider = "hianime"
-	animeID, err := uuid.Parse(strings.TrimSpace(req.GetAnimeId()))
-	if err != nil {
+	animeID := strings.TrimSpace(req.GetAnimeId())
+	slug := strings.TrimSpace(req.GetHianimeSlug())
+	if animeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid anime_id")
 	}
-	slug := strings.TrimSpace(req.GetHianimeSlug())
 	if slug == "" {
 		return nil, status.Error(codes.InvalidArgument, "hianime_slug is required")
 	}
 
-	now := time.Now().UTC()
-
-	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "db begin")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	// Ensure hianime slug mapping
-	qMapAnime := `
-INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id)
-VALUES ($1,$2,$3)
-ON CONFLICT (provider, provider_anime_id)
-DO UPDATE SET anime_id = EXCLUDED.anime_id;
-`
-	if _, err := tx.Exec(ctx, qMapAnime, provider, slug, animeID); err != nil {
-		return nil, status.Error(codes.Internal, "db")
-	}
-
-	// Normalise episodes into a common format and delegate to upsertEpisodes.
-	episodes := make([]episodeInput, 0, len(req.GetEpisodes()))
+	episodes := make([]store.EpisodeInput, 0, len(req.GetEpisodes()))
 	for _, ep := range req.GetEpisodes() {
 		if ep == nil {
 			continue
 		}
-		episodes = append(episodes, episodeInput{
-			providerEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
-			number:            ep.GetNumber(),
-			title:             ep.GetTitle(),
-			isFiller:          ep.GetIsFiller(),
-			hasIsFiller:       true,
+		episodes = append(episodes, store.EpisodeInput{
+			ProviderEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
+			Number:            ep.GetNumber(),
+			Title:             ep.GetTitle(),
+			IsFiller:          ep.GetIsFiller(),
+			HasIsFiller:       true,
 		})
 	}
-	episodeIDs, err := upsertEpisodes(ctx, tx, provider, animeID, episodes, now)
+
+	ids, err := s.Store.UpsertHiAnimeEpisodes(ctx, animeID, slug, episodes)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
-		return nil, status.Error(codes.Internal, "db outbox")
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, status.Error(codes.Internal, "db commit")
-	}
-	return &catalogv1.UpsertHiAnimeEpisodesResponse{EpisodeIds: episodeIDs}, nil
+	return &catalogv1.UpsertHiAnimeEpisodesResponse{EpisodeIds: ids}, nil
 }
 
 func (s *CatalogService) UpsertJikanAnime(ctx context.Context, req *catalogv1.UpsertJikanAnimeRequest) (*catalogv1.UpsertJikanAnimeResponse, error) {
@@ -367,92 +144,30 @@ func (s *CatalogService) UpsertJikanAnime(ctx context.Context, req *catalogv1.Up
 	if anime == nil {
 		return nil, status.Error(codes.InvalidArgument, "anime is required")
 	}
-	malID := anime.GetMalId()
-	if malID <= 0 {
+	if anime.GetMalId() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "mal_id is required")
 	}
 
-	provider := "mal"
-	externalID := fmt.Sprintf("%d", malID)
-	genresJSON, _ := json.Marshal(anime.GetGenres())
-	now := time.Now().UTC()
-
-	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
+	animeID, err := s.Store.UpsertJikanAnime(ctx, store.JikanAnimeInput{
+		MalID:         anime.GetMalId(),
+		Title:         anime.GetTitle(),
+		TitleEnglish:  anime.GetTitleEnglish(),
+		TitleJapanese: anime.GetTitleJapanese(),
+		Image:         anime.GetImage(),
+		Synopsis:      anime.GetSynopsis(),
+		Genres:        anime.GetGenres(),
+		Type:          anime.GetType(),
+		Status:        anime.GetStatus(),
+		TotalEpisodes: anime.GetEpisodes(),
+		Score:         anime.GetScore(),
+	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db begin")
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var animeID uuid.UUID
-	qFind := qSelectAnimeIDByExternal
-	err = tx.QueryRow(ctx, qFind, provider, externalID).Scan(&animeID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, status.Error(codes.Internal, "db")
-		}
-		animeID = uuid.New()
-		qIns := `
-INSERT INTO anime (id, title, title_english, title_japanese, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, score, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'unknown',$9,$10,'',$11,$12,$13,$14)
-`
-		_, err = tx.Exec(ctx, qIns,
-			animeID,
-			anime.GetTitle(),
-			anime.GetTitleEnglish(),
-			anime.GetTitleJapanese(),
-			"",
-			anime.GetImage(),
-			anime.GetSynopsis(),
-			genresJSON,
-			anime.GetType(),
-			anime.GetStatus(),
-			anime.GetEpisodes(),
-			anime.GetScore(),
-			now, now,
-		)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "db: "+err.Error())
-		}
-		qMap := `INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ($1,$2,$3)`
-		if _, err := tx.Exec(ctx, qMap, provider, externalID, animeID); err != nil {
-			return nil, status.Error(codes.Internal, "db: "+err.Error())
-		}
-	} else {
-		qUpd := `
-UPDATE anime
-SET title=$2, title_english=$3, title_japanese=$4, image=$5, description=$6, genres=$7, type=$8, status=$9, total_episodes=$10, score=$11, updated_at=$12
-WHERE id=$1
-`
-		if _, err := tx.Exec(ctx, qUpd,
-			animeID,
-			anime.GetTitle(),
-			anime.GetTitleEnglish(),
-			anime.GetTitleJapanese(),
-			anime.GetImage(),
-			anime.GetSynopsis(),
-			genresJSON,
-			anime.GetType(),
-			anime.GetStatus(),
-			anime.GetEpisodes(),
-			anime.GetScore(),
-			now,
-		); err != nil {
-			return nil, status.Error(codes.Internal, "db")
-		}
-	}
-
-	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
-		return nil, status.Error(codes.Internal, "db outbox")
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, status.Error(codes.Internal, "db commit")
-	}
-	return &catalogv1.UpsertJikanAnimeResponse{AnimeId: animeID.String()}, nil
+	return &catalogv1.UpsertJikanAnimeResponse{AnimeId: animeID}, nil
 }
 
 func (s *CatalogService) UpsertAnimeKaiAnime(ctx context.Context, req *catalogv1.UpsertAnimeKaiAnimeRequest) (*catalogv1.UpsertAnimeKaiAnimeResponse, error) {
-	const provider = "animekai"
-
 	anime := req.GetAnime()
 	if anime == nil {
 		return nil, status.Error(codes.InvalidArgument, "anime is required")
@@ -462,102 +177,49 @@ func (s *CatalogService) UpsertAnimeKaiAnime(ctx context.Context, req *catalogv1
 		return nil, status.Error(codes.InvalidArgument, "provider_anime_id is required")
 	}
 
-	genresJSON, _ := json.Marshal(anime.GetGenres())
-	now := time.Now().UTC()
-
-	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "db begin")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	// 1) resolve or create anime_id
-	var animeID uuid.UUID
-	qFindAnime := `SELECT anime_id FROM external_anime_ids WHERE provider=$1 AND provider_anime_id=$2`
-	err = tx.QueryRow(ctx, qFindAnime, provider, provAnimeID).Scan(&animeID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, status.Error(codes.Internal, "db")
-		}
-		animeID = uuid.New()
-
-		qInsertAnime := `
-INSERT INTO anime (id, title, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-`
-		_, err = tx.Exec(ctx, qInsertAnime,
-			animeID,
-			anime.GetTitle(),
-			anime.GetUrl(),
-			anime.GetImage(),
-			anime.GetDescription(),
-			genresJSON,
-			anime.GetSubOrDub(),
-			anime.GetType(),
-			anime.GetStatus(),
-			anime.GetOtherName(),
-			anime.GetTotalEpisodes(),
-			now, now,
-		)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "db")
-		}
-
-		qInsertExt := `INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ($1,$2,$3)`
-		_, err = tx.Exec(ctx, qInsertExt, provider, provAnimeID, animeID)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "db")
-		}
-	} else {
-		// update existing anime
-		qUpdateAnime := `
-UPDATE anime
-SET title=$2, url=$3, image=$4, description=$5, genres=$6, sub_or_dub=$7, type=$8, status=$9, other_name=$10, total_episodes=$11, updated_at=$12
-WHERE id=$1
-`
-		_, err = tx.Exec(ctx, qUpdateAnime,
-			animeID,
-			anime.GetTitle(),
-			anime.GetUrl(),
-			anime.GetImage(),
-			anime.GetDescription(),
-			genresJSON,
-			anime.GetSubOrDub(),
-			anime.GetType(),
-			anime.GetStatus(),
-			anime.GetOtherName(),
-			anime.GetTotalEpisodes(),
-			now,
-		)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "db")
-		}
-	}
-
-	// Normalise episodes into a common format and delegate to upsertEpisodes.
-	episodes := make([]episodeInput, 0, len(anime.GetEpisodes()))
+	episodes := make([]store.EpisodeInput, 0, len(anime.GetEpisodes()))
 	for _, ep := range anime.GetEpisodes() {
 		if ep == nil {
 			continue
 		}
-		episodes = append(episodes, episodeInput{
-			providerEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
-			number:            ep.GetNumber(),
-			title:             ep.GetTitle(),
-			url:               ep.GetUrl(),
+		episodes = append(episodes, store.EpisodeInput{
+			ProviderEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
+			Number:            ep.GetNumber(),
+			Title:             ep.GetTitle(),
+			URL:               ep.GetUrl(),
 		})
 	}
-	episodeIDs, err := upsertEpisodes(ctx, tx, provider, animeID, episodes, now)
+
+	animeID, epIDs, err := s.Store.UpsertAnimeKaiAnime(ctx, store.AnimeKaiAnimeInput{
+		ProviderAnimeID: provAnimeID,
+		Title:           anime.GetTitle(),
+		URL:             anime.GetUrl(),
+		Image:           anime.GetImage(),
+		Description:     anime.GetDescription(),
+		Genres:          anime.GetGenres(),
+		SubOrDub:        anime.GetSubOrDub(),
+		Type:            anime.GetType(),
+		Status:          anime.GetStatus(),
+		OtherName:       anime.GetOtherName(),
+		TotalEpisodes:   anime.GetTotalEpisodes(),
+		Episodes:        episodes,
+	})
 	if err != nil {
 		return nil, err
 	}
+	return &catalogv1.UpsertAnimeKaiAnimeResponse{AnimeId: animeID, EpisodeIds: epIDs}, nil
+}
 
-	if err := s.insertOutboxEvent(ctx, tx, catalogEventAnimeUpserted, map[string]any{"anime_id": animeID.String()}); err != nil {
-		return nil, status.Error(codes.Internal, "db outbox")
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, status.Error(codes.Internal, "db commit")
-	}
+// ── helpers ────────────────────────────────────────────────────────────────
 
-	return &catalogv1.UpsertAnimeKaiAnimeResponse{AnimeId: animeID.String(), EpisodeIds: episodeIDs}, nil
+func episodesToProto(eps []store.Episode) []*catalogv1.Episode {
+	out := make([]*catalogv1.Episode, 0, len(eps))
+	for _, ep := range eps {
+		pb := &catalogv1.Episode{Id: ep.ID, AnimeId: ep.AnimeID, Number: ep.Number, Title: ep.Title}
+		if ep.AiredAt != nil {
+			pb.AiredAtRfc3339 = ep.AiredAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, pb)
+	}
+	return out
 }
