@@ -78,7 +78,7 @@ func main() {
 		run.Exit(1)
 	}
 	grpcSrv := grpc.NewServer()
-	socialv1.RegisterSocialServiceServer(grpcSrv, &grpcapi.SocialService{Comments: comments})
+	socialv1.RegisterSocialServiceServer(grpcSrv, &grpcapi.SocialService{Comments: comments, Ratings: ratings})
 	reflection.Register(grpcSrv)
 	go func() {
 		log.Info("grpc server starting", zap.String("addr", grpcAddr))

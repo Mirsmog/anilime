@@ -40,7 +40,7 @@ func main() {
 	}
 
 	r := chi.NewRouter()
-	httpserver.SetupRouter(r)
+	httpserver.SetupRouter(r, httpserver.RouterConfig{Logger: log})
 
 	verifier := auth.JWTVerifier{Secret: bffCfg.JWTSecret}
 
@@ -118,7 +118,19 @@ func main() {
 		r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
 	})
 
-	r.Get("/v1/search", bffhandlers.Search(searchc.Client, bffCache))
+	// Public rate limiter for unauthenticated read endpoints (50 req/s, burst 100)
+	publicLimiter := bffhttp.NewRateLimiter(50, 100)
+
+	r.Group(func(r chi.Router) {
+		r.Use(publicLimiter.Middleware)
+		r.Get("/v1/search", bffhandlers.Search(searchc.Client, bffCache))
+		r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client, bffCache))
+		r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client, analyticsPublisher))
+		r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
+		r.Get("/v1/anime/{anime_id}/rating", bffhandlers.GetRating(socialc.Client))
+		r.Get("/v1/episodes/{episode_id}", bffhandlers.GetEpisode(catalogc.Client))
+		r.Get("/v1/comments/{anime_id}", bffhandlers.ListComments(socialc.Client))
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))
@@ -143,16 +155,9 @@ func main() {
 		r.Post("/v1/comments/{comment_id}/vote", bffhandlers.VoteComment(socialc.Client, eventPublisher))
 		r.Put("/v1/comments/{comment_id}", bffhandlers.UpdateComment(socialc.Client, eventPublisher))
 		r.Delete("/v1/comments/{comment_id}", bffhandlers.DeleteComment(socialc.Client, eventPublisher))
+
+		r.Post("/v1/anime/{anime_id}/rating", bffhandlers.RateAnime(socialc.Client))
 	})
-
-	// Public comment listing (no auth required)
-	r.Get("/v1/comments/{anime_id}", bffhandlers.ListComments(socialc.Client))
-
-	// Public catalog endpoints (no auth required)
-	r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client, bffCache))
-	r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client, analyticsPublisher))
-	r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
-	r.Get("/v1/episodes/{episode_id}", bffhandlers.GetEpisode(catalogc.Client))
 
 	srv := httpserver.New(httpserver.Options{Addr: cfg.HTTP.Addr, ServiceName: cfg.ServiceName, Logger: log, Router: r})
 

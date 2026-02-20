@@ -8,7 +8,6 @@ package socialv1
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -25,6 +24,8 @@ const (
 	SocialService_VoteComment_FullMethodName   = "/social.v1.SocialService/VoteComment"
 	SocialService_UpdateComment_FullMethodName = "/social.v1.SocialService/UpdateComment"
 	SocialService_DeleteComment_FullMethodName = "/social.v1.SocialService/DeleteComment"
+	SocialService_RateAnime_FullMethodName     = "/social.v1.SocialService/RateAnime"
+	SocialService_GetRating_FullMethodName     = "/social.v1.SocialService/GetRating"
 )
 
 // SocialServiceClient is the client API for SocialService service.
@@ -36,6 +37,8 @@ type SocialServiceClient interface {
 	VoteComment(ctx context.Context, in *VoteCommentRequest, opts ...grpc.CallOption) (*VoteCommentResponse, error)
 	UpdateComment(ctx context.Context, in *UpdateCommentRequest, opts ...grpc.CallOption) (*UpdateCommentResponse, error)
 	DeleteComment(ctx context.Context, in *DeleteCommentRequest, opts ...grpc.CallOption) (*DeleteCommentResponse, error)
+	RateAnime(ctx context.Context, in *RateAnimeRequest, opts ...grpc.CallOption) (*RateAnimeResponse, error)
+	GetRating(ctx context.Context, in *GetRatingRequest, opts ...grpc.CallOption) (*GetRatingResponse, error)
 }
 
 type socialServiceClient struct {
@@ -96,6 +99,26 @@ func (c *socialServiceClient) DeleteComment(ctx context.Context, in *DeleteComme
 	return out, nil
 }
 
+func (c *socialServiceClient) RateAnime(ctx context.Context, in *RateAnimeRequest, opts ...grpc.CallOption) (*RateAnimeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RateAnimeResponse)
+	err := c.cc.Invoke(ctx, SocialService_RateAnime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *socialServiceClient) GetRating(ctx context.Context, in *GetRatingRequest, opts ...grpc.CallOption) (*GetRatingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRatingResponse)
+	err := c.cc.Invoke(ctx, SocialService_GetRating_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SocialServiceServer is the server API for SocialService service.
 // All implementations must embed UnimplementedSocialServiceServer
 // for forward compatibility.
@@ -105,6 +128,8 @@ type SocialServiceServer interface {
 	VoteComment(context.Context, *VoteCommentRequest) (*VoteCommentResponse, error)
 	UpdateComment(context.Context, *UpdateCommentRequest) (*UpdateCommentResponse, error)
 	DeleteComment(context.Context, *DeleteCommentRequest) (*DeleteCommentResponse, error)
+	RateAnime(context.Context, *RateAnimeRequest) (*RateAnimeResponse, error)
+	GetRating(context.Context, *GetRatingRequest) (*GetRatingResponse, error)
 	mustEmbedUnimplementedSocialServiceServer()
 }
 
@@ -129,6 +154,12 @@ func (UnimplementedSocialServiceServer) UpdateComment(context.Context, *UpdateCo
 }
 func (UnimplementedSocialServiceServer) DeleteComment(context.Context, *DeleteCommentRequest) (*DeleteCommentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteComment not implemented")
+}
+func (UnimplementedSocialServiceServer) RateAnime(context.Context, *RateAnimeRequest) (*RateAnimeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RateAnime not implemented")
+}
+func (UnimplementedSocialServiceServer) GetRating(context.Context, *GetRatingRequest) (*GetRatingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRating not implemented")
 }
 func (UnimplementedSocialServiceServer) mustEmbedUnimplementedSocialServiceServer() {}
 func (UnimplementedSocialServiceServer) testEmbeddedByValue()                       {}
@@ -241,6 +272,42 @@ func _SocialService_DeleteComment_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SocialService_RateAnime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RateAnimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SocialServiceServer).RateAnime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SocialService_RateAnime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SocialServiceServer).RateAnime(ctx, req.(*RateAnimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SocialService_GetRating_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRatingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SocialServiceServer).GetRating(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SocialService_GetRating_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SocialServiceServer).GetRating(ctx, req.(*GetRatingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SocialService_ServiceDesc is the grpc.ServiceDesc for SocialService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -267,6 +334,14 @@ var SocialService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteComment",
 			Handler:    _SocialService_DeleteComment_Handler,
+		},
+		{
+			MethodName: "RateAnime",
+			Handler:    _SocialService_RateAnime_Handler,
+		},
+		{
+			MethodName: "GetRating",
+			Handler:    _SocialService_GetRating_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
