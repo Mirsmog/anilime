@@ -59,7 +59,7 @@ func TestGetAnime_OK(t *testing.T) {
 			Anime: []*catalogv1.Anime{{Id: "a1", Title: "Steins;Gate", Score: 9.1}},
 		},
 	}
-	handler := GetAnime(stub)
+	handler := GetAnime(stub, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime/a1", map[string]string{"anime_id": "a1"}))
 
@@ -79,7 +79,7 @@ func TestGetAnime_NotFound(t *testing.T) {
 	stub := &stubCatalogClient{
 		getAnimeByIDsResp: &catalogv1.GetAnimeByIDsResponse{Anime: nil},
 	}
-	handler := GetAnime(stub)
+	handler := GetAnime(stub, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime/missing", map[string]string{"anime_id": "missing"}))
 
@@ -90,7 +90,7 @@ func TestGetAnime_NotFound(t *testing.T) {
 
 func TestGetAnime_MissingID(t *testing.T) {
 	stub := &stubCatalogClient{}
-	handler := GetAnime(stub)
+	handler := GetAnime(stub, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime/", map[string]string{"anime_id": ""}))
 
@@ -103,7 +103,7 @@ func TestGetAnime_GRPCError(t *testing.T) {
 	stub := &stubCatalogClient{
 		getAnimeByIDsErr: status.Error(codes.Internal, "db error"),
 	}
-	handler := GetAnime(stub)
+	handler := GetAnime(stub, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime/a1", map[string]string{"anime_id": "a1"}))
 

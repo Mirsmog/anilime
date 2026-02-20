@@ -10,12 +10,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	searchv1 "github.com/example/anime-platform/gen/search/v1"
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/services/search/internal/meili"
 )
 
 type SearchService struct {
 	searchv1.UnimplementedSearchServiceServer
-	Meili meili.Searcher
+	Meili     meili.Searcher
+	Analytics *analytics.Publisher
 }
 
 type meiliAnime struct {
@@ -75,6 +77,13 @@ func (s *SearchService) SearchAnime(ctx context.Context, req *searchv1.SearchAni
 			TotalEpisodes: doc.TotalEpisodes,
 		})
 	}
+
+	s.Analytics.Publish(analytics.SubjectSearchPerformed, "search_performed", "", map[string]any{
+		"query":         q,
+		"results_count": int(resp.EstimatedTotalHits),
+		"has_results":   resp.EstimatedTotalHits > 0,
+	})
+
 	return out, nil
 }
 

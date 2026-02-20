@@ -16,6 +16,7 @@ import (
 
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	searchv1 "github.com/example/anime-platform/gen/search/v1"
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/internal/platform/logging"
 	"github.com/example/anime-platform/internal/platform/natsconn"
 	"github.com/example/anime-platform/internal/platform/run"
@@ -59,6 +60,13 @@ func main() {
 	catalogClient := catalogv1.NewCatalogServiceClient(catalogConn)
 	meiliClient := meili.New(cfg.MeiliURL, cfg.MeiliAPIKey)
 
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Error("jetstream init", zap.Error(err))
+		run.Exit(1)
+	}
+	analyticsPublisher := analytics.New(js, log)
+
 	idx := &indexer.Indexer{CatalogClient: catalogClient, Meili: meiliClient, Log: log, NATS: nc, ReindexEvery: cfg.ReindexInterval}
 	if cfg.ReindexOnce {
 		if err := idx.ReindexAll(context.Background()); err != nil {
@@ -74,7 +82,7 @@ func main() {
 	}()
 
 	grpcSrv := grpc.NewServer()
-	searchv1.RegisterSearchServiceServer(grpcSrv, &grpcapi.SearchService{Meili: meiliClient})
+	searchv1.RegisterSearchServiceServer(grpcSrv, &grpcapi.SearchService{Meili: meiliClient, Analytics: analyticsPublisher})
 	reflection.Register(grpcSrv)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
