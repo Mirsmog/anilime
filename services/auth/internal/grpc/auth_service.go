@@ -162,7 +162,6 @@ func (s *AuthService) Logout(ctx context.Context, req *authv1.LogoutRequest) (*a
 }
 
 func (s *AuthService) Me(ctx context.Context, _ *authv1.MeRequest) (*authv1.MeResponse, error) {
-	// Expect "authorization: Bearer <token>" in metadata
 	md, _ := metadata.FromIncomingContext(ctx)
 	authz := first(md.Get("authorization"))
 	if authz == "" {

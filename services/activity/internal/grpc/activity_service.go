@@ -3,26 +3,25 @@ package grpcapi
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	activityv1 "github.com/example/anime-platform/gen/activity/v1"
+	"github.com/example/anime-platform/services/activity/internal/store"
 )
+
+// completedThreshold is the watch ratio at which an episode is marked completed.
+const completedThreshold = 0.90
 
 type ActivityService struct {
 	activityv1.UnimplementedActivityServiceServer
-	DB *pgxpool.Pool
+	Progress store.ProgressRepository
 }
-
-const completedThreshold = 0.90
 
 func (s *ActivityService) UpsertEpisodeProgress(ctx context.Context, req *activityv1.UpsertEpisodeProgressRequest) (*activityv1.UpsertEpisodeProgressResponse, error) {
 	userID, err := uuid.Parse(strings.TrimSpace(req.GetUserId()))
@@ -34,68 +33,23 @@ func (s *ActivityService) UpsertEpisodeProgress(ctx context.Context, req *activi
 		return nil, status.Error(codes.InvalidArgument, "invalid episode_id")
 	}
 
-	pos := int(req.GetPositionSeconds())
-	dur := int(req.GetDurationSeconds())
-	if pos < 0 {
-		pos = 0
-	}
-	if dur < 0 {
-		dur = 0
-	}
-	clientTS := req.GetClientTsMs()
+	pos := clampMin(int(req.GetPositionSeconds()), 0)
+	dur := clampMin(int(req.GetDurationSeconds()), 0)
 
-	completed := false
-	if dur > 0 {
-		completed = float64(pos)/float64(dur) >= completedThreshold
+	rec := store.ProgressRecord{
+		UserID:          userID,
+		EpisodeID:       epID,
+		PositionSeconds: pos,
+		DurationSeconds: dur,
+		Completed:       dur > 0 && float64(pos)/float64(dur) >= completedThreshold,
+		ClientTsMs:      req.GetClientTsMs(),
 	}
 
-	now := time.Now().UTC()
-
-	q := `
-INSERT INTO user_episode_progress (user_id, episode_id, position_seconds, duration_seconds, completed, client_ts_ms, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (user_id, episode_id)
-DO UPDATE SET
-  position_seconds = EXCLUDED.position_seconds,
-  duration_seconds = EXCLUDED.duration_seconds,
-  completed = EXCLUDED.completed,
-  client_ts_ms = EXCLUDED.client_ts_ms,
-  updated_at = EXCLUDED.updated_at
-WHERE user_episode_progress.client_ts_ms <= EXCLUDED.client_ts_ms
-RETURNING position_seconds, duration_seconds, completed, client_ts_ms, updated_at;
-`
-
-	var (
-		retPos, retDur int
-		retCompleted   bool
-		retClientTS    int64
-		updatedAt      time.Time
-	)
-
-	err = s.DB.QueryRow(ctx, q, userID, epID, pos, dur, completed, clientTS, now).Scan(&retPos, &retDur, &retCompleted, &retClientTS, &updatedAt)
+	out, err := s.Progress.Upsert(ctx, rec)
 	if err != nil {
-		// If WHERE prevented update, RETURNING returns no rows.
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Fetch current state
-			getQ := `SELECT position_seconds, duration_seconds, completed, client_ts_ms, updated_at FROM user_episode_progress WHERE user_id=$1 AND episode_id=$2;`
-			if err := s.DB.QueryRow(ctx, getQ, userID, epID).Scan(&retPos, &retDur, &retCompleted, &retClientTS, &updatedAt); err != nil {
-				return nil, status.Error(codes.Internal, "db")
-			}
-		} else {
-			return nil, status.Error(codes.Internal, "db")
-		}
+		return nil, err
 	}
-
-	resp := &activityv1.UpsertEpisodeProgressResponse{Progress: &activityv1.EpisodeProgress{
-		UserId:          userID.String(),
-		EpisodeId:       epID.String(),
-		PositionSeconds: int32(retPos),
-		DurationSeconds: int32(retDur),
-		Completed:       retCompleted,
-		UpdatedAtMs:     updatedAt.UnixMilli(),
-		ClientTsMs:      retClientTS,
-	}}
-	return resp, nil
+	return &activityv1.UpsertEpisodeProgressResponse{Progress: toProtoProgress(out)}, nil
 }
 
 func (s *ActivityService) GetContinueWatching(ctx context.Context, req *activityv1.GetContinueWatchingRequest) (*activityv1.GetContinueWatchingResponse, error) {
@@ -104,86 +58,83 @@ func (s *ActivityService) GetContinueWatching(ctx context.Context, req *activity
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	limit := int(req.GetLimit())
-	if limit <= 0 {
-		limit = 25
-	}
-	if limit > 100 {
-		limit = 100
-	}
+	limit := clampLimit(int(req.GetLimit()), 25, 100)
+	cursor := decodeCursor(req.GetCursor())
 
-	// Cursor format: base64("<tsMs>:<episodeUUID>")
-	var (
-		cursorTS      int64
-		cursorEpisode uuid.UUID
-		useCursor     bool
-	)
-	if c := strings.TrimSpace(req.GetCursor()); c != "" {
-		b, err := base64.RawURLEncoding.DecodeString(c)
-		if err == nil {
-			parts := strings.SplitN(string(b), ":", 2)
-			if len(parts) == 2 {
-				if ts, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
-					if eid, err := uuid.Parse(parts[1]); err == nil {
-						cursorTS = ts
-						cursorEpisode = eid
-						useCursor = true
-					}
-				}
-			}
-		}
-	}
-
-	qBase := `
-SELECT episode_id, position_seconds, duration_seconds, completed, client_ts_ms, updated_at
-FROM user_episode_progress
-WHERE user_id=$1
-`
-	args := []any{userID}
-	if useCursor {
-		qBase += " AND (updated_at, episode_id) < (to_timestamp($2 / 1000.0), $3)"
-		args = append(args, cursorTS, cursorEpisode)
-	}
-	qBase += " ORDER BY updated_at DESC, episode_id DESC LIMIT $" + strconv.Itoa(len(args)+1)
-	args = append(args, limit)
-
-	rows, err := s.DB.Query(ctx, qBase, args...)
+	records, err := s.Progress.List(ctx, userID, limit, cursor)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "db")
+		return nil, err
 	}
-	defer rows.Close()
 
 	resp := &activityv1.GetContinueWatchingResponse{Limit: int32(limit)}
-	var lastUpdated time.Time
-	var lastEpisode string
-	for rows.Next() {
-		var (
-			epID      string
-			pos, dur  int
-			completed bool
-			clientTS  int64
-			updatedAt time.Time
-		)
-		if err := rows.Scan(&epID, &pos, &dur, &completed, &clientTS, &updatedAt); err != nil {
-			return nil, status.Error(codes.Internal, "db")
-		}
-		resp.Items = append(resp.Items, &activityv1.ContinueItem{Progress: &activityv1.EpisodeProgress{
-			UserId:          userID.String(),
-			EpisodeId:       epID,
-			PositionSeconds: int32(pos),
-			DurationSeconds: int32(dur),
-			Completed:       completed,
-			UpdatedAtMs:     updatedAt.UnixMilli(),
-			ClientTsMs:      clientTS,
-		}})
-		lastUpdated = updatedAt
-		lastEpisode = epID
+	for _, r := range records {
+		resp.Items = append(resp.Items, &activityv1.ContinueItem{Progress: toProtoProgress(r)})
 	}
-
-	if len(resp.Items) == limit {
-		// generate next cursor from last item
-		payload := strconv.FormatInt(lastUpdated.UnixMilli(), 10) + ":" + lastEpisode
-		resp.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(payload))
+	if len(records) == limit {
+		last := records[len(records)-1]
+		resp.NextCursor = encodeCursor(last.UpdatedAt.UnixMilli(), last.EpisodeID.String())
 	}
 	return resp, nil
+}
+
+func toProtoProgress(r store.ProgressRecord) *activityv1.EpisodeProgress {
+	return &activityv1.EpisodeProgress{
+		UserId:          r.UserID.String(),
+		EpisodeId:       r.EpisodeID.String(),
+		PositionSeconds: int32(r.PositionSeconds),
+		DurationSeconds: int32(r.DurationSeconds),
+		Completed:       r.Completed,
+		UpdatedAtMs:     r.UpdatedAt.UnixMilli(),
+		ClientTsMs:      r.ClientTsMs,
+	}
+}
+
+// encodeCursor encodes updated_at millis and episode UUID as a base64 opaque cursor.
+func encodeCursor(tsMs int64, episodeID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(tsMs, 10) + ":" + episodeID))
+}
+
+// decodeCursor parses the opaque cursor produced by encodeCursor.
+func decodeCursor(raw string) *store.ProgressCursor {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	b, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil
+	}
+	parts := strings.SplitN(string(b), ":", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return nil
+	}
+	eid, err := uuid.Parse(parts[1])
+	if err != nil {
+		return nil
+	}
+	return &store.ProgressCursor{
+		UpdatedAt: time.UnixMilli(ts).UTC(),
+		EpisodeID: eid,
+	}
+}
+
+func clampLimit(v, def, maxVal int) int {
+	if v <= 0 {
+		return def
+	}
+	if v > maxVal {
+		return maxVal
+	}
+	return v
+}
+
+func clampMin(v, minVal int) int {
+	if v < minVal {
+		return minVal
+	}
+	return v
 }

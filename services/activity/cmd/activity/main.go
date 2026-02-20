@@ -19,6 +19,7 @@ import (
 	"github.com/example/anime-platform/internal/platform/run"
 	grpcconfig "github.com/example/anime-platform/services/activity/internal/config"
 	grpcapi "github.com/example/anime-platform/services/activity/internal/grpc"
+	activitystore "github.com/example/anime-platform/services/activity/internal/store"
 	"github.com/example/anime-platform/services/activity/internal/worker"
 )
 
@@ -50,7 +51,9 @@ func main() {
 	}
 
 	grpcSrv := grpc.NewServer()
-	activityv1.RegisterActivityServiceServer(grpcSrv, &grpcapi.ActivityService{DB: pool})
+	activityv1.RegisterActivityServiceServer(grpcSrv, &grpcapi.ActivityService{
+		Progress: activitystore.NewPostgresProgressRepository(pool),
+	})
 	reflection.Register(grpcSrv)
 
 	log.Info("grpc server starting", zap.String("addr", grpcCfg.Addr))
@@ -58,12 +61,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// start NATS consumer for activity progress
 	nc, err := natsconn.Connect(natsconn.Options{})
 	if err != nil {
 		log.Error("nats connect", zap.Error(err))
 	} else {
-		// start worker that consumes progress events and writes to DB
 		go worker.StartProgressConsumer(ctx, nc, pool, log)
 		defer nc.Close()
 	}

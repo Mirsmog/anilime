@@ -20,6 +20,7 @@ import (
 	catalogconfig "github.com/example/anime-platform/services/catalog/internal/config"
 	grpcapi "github.com/example/anime-platform/services/catalog/internal/grpc"
 	"github.com/example/anime-platform/services/catalog/internal/outbox"
+	catalogstore "github.com/example/anime-platform/services/catalog/internal/store"
 )
 
 func main() {
@@ -54,7 +55,9 @@ func main() {
 	}
 
 	grpcSrv := grpc.NewServer()
-	catalogv1.RegisterCatalogServiceServer(grpcSrv, &grpcapi.CatalogService{DB: pool})
+	catalogv1.RegisterCatalogServiceServer(grpcSrv, &grpcapi.CatalogService{
+		Store: catalogstore.NewPostgresCatalogStore(pool),
+	})
 	reflection.Register(grpcSrv)
 
 	nc, err := natsconn.Connect(natsconn.Options{URL: outboxCfg.NATSURL})

@@ -18,7 +18,7 @@ import (
 type ResolverService struct {
 	streamingv1.UnimplementedStreamingResolverServiceServer
 	Catalog catalogv1.CatalogServiceClient
-	HiAnime *hianime.Client
+	HiAnime hianime.Provider
 	Cache   *cache.RedisCache
 	Log     *zap.Logger
 }

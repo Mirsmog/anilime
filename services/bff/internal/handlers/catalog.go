@@ -61,7 +61,6 @@ func toEpisodeResponse(e *catalogv1.Episode) episodeResponse {
 	}
 }
 
-// GetAnime handles GET /v1/anime/{anime_id}
 func GetAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -88,7 +87,6 @@ func GetAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 	}
 }
 
-// GetEpisodesByAnime handles GET /v1/anime/{anime_id}/episodes
 func GetEpisodesByAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -115,7 +113,6 @@ func GetEpisodesByAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc
 	}
 }
 
-// GetEpisode handles GET /v1/episodes/{episode_id}
 func GetEpisode(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -142,7 +139,6 @@ func GetEpisode(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 	}
 }
 
-// ListAnime handles GET /v1/anime?limit=N&offset=M
 func ListAnime(catalog catalogv1.CatalogServiceClient, cache Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())

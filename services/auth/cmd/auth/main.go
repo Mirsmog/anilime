@@ -72,7 +72,7 @@ func main() {
 
 	grpcSrv := grpc.NewServer()
 	authv1.RegisterAuthServiceServer(grpcSrv, &grpcapi.AuthService{
-		Store:  store.Store{DB: a.DB},
+		Store:  store.PostgresStore{DB: a.DB},
 		Tokens: tokens.Service{Secret: authCfg.JWTSecret, AccessTokenTTL: authCfg.AccessTokenTTL, RefreshTokenTTL: authCfg.RefreshTokenTTL},
 		Cfg:    authCfg,
 	})

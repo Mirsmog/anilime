@@ -13,7 +13,6 @@ import (
 	"github.com/example/anime-platform/services/social/internal/store"
 )
 
-// SocialService implements the SocialServiceServer gRPC interface.
 type SocialService struct {
 	socialv1.UnimplementedSocialServiceServer
 	Comments store.CommentStore
