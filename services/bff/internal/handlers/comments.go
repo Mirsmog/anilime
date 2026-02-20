@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,6 +37,22 @@ func withUserMD(r *http.Request) (context.Context, bool) {
 	return metadata.NewOutgoingContext(r.Context(), md), true
 }
 
+// tryPublishAsync publishes an event and writes 202 Accepted.
+// Returns true if handled (success or publish error); false if publisher is disabled.
+func tryPublishAsync(w http.ResponseWriter, rid, subject string, payload map[string]any, publisher *EventPublisher) bool {
+	if publisher == nil || !publisher.Enabled() {
+		return false
+	}
+	eventID, err := publisher.PublishJSON(subject, payload)
+	if err != nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
+		return true
+	}
+	w.Header().Set("X-Event-ID", eventID)
+	w.WriteHeader(http.StatusAccepted)
+	return true
+}
+
 func CreateComment(client socialv1.SocialServiceClient, publisher *EventPublisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -54,29 +69,16 @@ func CreateComment(client socialv1.SocialServiceClient, publisher *EventPublishe
 		}
 
 		var req createCommentReq
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
-		// Async publish to JetStream if configured
-		if publisher != nil && publisher.Enabled() {
-			uid, _ := auth.UserIDFromContext(r.Context())
-			payload := map[string]any{
-				"user_id":  uid,
-				"anime_id": animeID,
-				"body":     req.Body,
-			}
-			if req.ParentID != nil {
-				payload["parent_id"] = *req.ParentID
-			}
-			eventID, err := publisher.PublishJSON("social.comments.create", payload)
-			if err != nil {
-				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
-				return
-			}
-			w.Header().Set("X-Event-ID", eventID)
-			w.WriteHeader(http.StatusAccepted)
+		uid, _ := auth.UserIDFromContext(r.Context())
+		payload := map[string]any{"user_id": uid, "anime_id": animeID, "body": req.Body}
+		if req.ParentID != nil {
+			payload["parent_id"] = *req.ParentID
+		}
+		if tryPublishAsync(w, rid, "social.comments.create", payload, publisher) {
 			return
 		}
 
@@ -147,26 +149,14 @@ func VoteComment(client socialv1.SocialServiceClient, publisher *EventPublisher)
 		}
 
 		var req voteReq
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
-		// Async publish
-		if publisher != nil && publisher.Enabled() {
-			uid, _ := auth.UserIDFromContext(r.Context())
-			payload := map[string]any{
-				"user_id":    uid,
-				"comment_id": commentID,
-				"vote":       req.Vote,
-			}
-			eventID, err := publisher.PublishJSON("social.comments.vote", payload)
-			if err != nil {
-				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
-				return
-			}
-			w.Header().Set("X-Event-ID", eventID)
-			w.WriteHeader(http.StatusAccepted)
+		uid, _ := auth.UserIDFromContext(r.Context())
+		if tryPublishAsync(w, rid, "social.comments.vote", map[string]any{
+			"user_id": uid, "comment_id": commentID, "vote": req.Vote,
+		}, publisher) {
 			return
 		}
 
@@ -198,26 +188,14 @@ func UpdateComment(client socialv1.SocialServiceClient, publisher *EventPublishe
 		}
 
 		var req updateCommentReq
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
-		// Async publish
-		if publisher != nil && publisher.Enabled() {
-			uid, _ := auth.UserIDFromContext(r.Context())
-			payload := map[string]any{
-				"user_id":    uid,
-				"comment_id": commentID,
-				"body":       req.Body,
-			}
-			eventID, err := publisher.PublishJSON("social.comments.update", payload)
-			if err != nil {
-				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
-				return
-			}
-			w.Header().Set("X-Event-ID", eventID)
-			w.WriteHeader(http.StatusAccepted)
+		uid, _ := auth.UserIDFromContext(r.Context())
+		if tryPublishAsync(w, rid, "social.comments.update", map[string]any{
+			"user_id": uid, "comment_id": commentID, "body": req.Body,
+		}, publisher) {
 			return
 		}
 
@@ -248,20 +226,10 @@ func DeleteComment(client socialv1.SocialServiceClient, publisher *EventPublishe
 			return
 		}
 
-		// Async publish
-		if publisher != nil && publisher.Enabled() {
-			uid, _ := auth.UserIDFromContext(r.Context())
-			payload := map[string]any{
-				"user_id":    uid,
-				"comment_id": commentID,
-			}
-			eventID, err := publisher.PublishJSON("social.comments.delete", payload)
-			if err != nil {
-				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
-				return
-			}
-			w.Header().Set("X-Event-ID", eventID)
-			w.WriteHeader(http.StatusAccepted)
+		uid, _ := auth.UserIDFromContext(r.Context())
+		if tryPublishAsync(w, rid, "social.comments.delete", map[string]any{
+			"user_id": uid, "comment_id": commentID,
+		}, publisher) {
 			return
 		}
 
