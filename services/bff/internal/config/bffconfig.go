@@ -82,5 +82,19 @@ func LoadBFF() (BFFConfig, error) {
 		subj = "bff.cache.invalidate"
 	}
 
-	return BFFConfig{JWTSecret: []byte(secret), AuthGRPCAddr: authAddr, CatalogGRPCAddr: catalogAddr, ActivityGRPCAddr: activityAddr, SearchGRPCAddr: searchAddr, StreamingGRPCAddr: streamingAddr, SocialGRPCAddr: socialAddr, HLSProxyBaseURL: hlsBase, HLSProxySigningSecret: hlsSecret, NATSURL: natsURL, JikanBaseURL: jikanURL, CacheTTLSeconds: ttl, CacheInvalidationSubj: subj}, nil
+	return BFFConfig{
+		JWTSecret:             []byte(secret),
+		AuthGRPCAddr:          authAddr,
+		CatalogGRPCAddr:       catalogAddr,
+		ActivityGRPCAddr:      activityAddr,
+		SearchGRPCAddr:        searchAddr,
+		StreamingGRPCAddr:     streamingAddr,
+		SocialGRPCAddr:        socialAddr,
+		HLSProxyBaseURL:       hlsBase,
+		HLSProxySigningSecret: hlsSecret,
+		NATSURL:               natsURL,
+		JikanBaseURL:          jikanURL,
+		CacheTTLSeconds:       ttl,
+		CacheInvalidationSubj: subj,
+	}, nil
 }

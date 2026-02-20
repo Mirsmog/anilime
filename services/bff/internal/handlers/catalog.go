@@ -143,7 +143,7 @@ func GetEpisode(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 }
 
 // ListAnime handles GET /v1/anime?limit=N&offset=M
-func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
+func ListAnime(catalog catalogv1.CatalogServiceClient, cache Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
@@ -152,7 +152,7 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 
 		// Try cache first
 		key := fmt.Sprintf("ListAnime:%d:%d", limit, offset)
-		if cached, ok := cacheGet(key); ok {
+		if cached, ok := cache.Get(key); ok {
 			api.WriteJSON(w, http.StatusOK, cached)
 			return
 		}
@@ -169,7 +169,7 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 
 		if offset >= total {
 			resp := map[string]any{"anime": []any{}, "total": total, "limit": limit, "offset": offset}
-			cacheSet(key, resp)
+			cache.Set(key, resp)
 			api.WriteJSON(w, http.StatusOK, resp)
 			return
 		}
@@ -192,7 +192,7 @@ func ListAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 		}
 
 		resp := map[string]any{"anime": items, "total": total, "limit": limit, "offset": offset}
-		cacheSet(key, resp)
+		cache.Set(key, resp)
 		api.WriteJSON(w, http.StatusOK, resp)
 	}
 }

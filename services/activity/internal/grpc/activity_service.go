@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -83,10 +82,6 @@ RETURNING position_seconds, duration_seconds, completed, client_ts_ms, updated_a
 				return nil, status.Error(codes.Internal, "db")
 			}
 		} else {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) {
-				_ = pgErr
-			}
 			return nil, status.Error(codes.Internal, "db")
 		}
 	}

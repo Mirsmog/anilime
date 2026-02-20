@@ -59,7 +59,7 @@ func main() {
 	catalogClient := catalogv1.NewCatalogServiceClient(catalogConn)
 	meiliClient := meili.New(cfg.MeiliURL, cfg.MeiliAPIKey)
 
-	idx := &indexer.Config{CatalogClient: catalogClient, Meili: meiliClient, Log: log, NATS: nc, ReindexEvery: cfg.ReindexInterval}
+	idx := &indexer.Indexer{CatalogClient: catalogClient, Meili: meiliClient, Log: log, NATS: nc, ReindexEvery: cfg.ReindexInterval}
 	if cfg.ReindexOnce {
 		if err := idx.ReindexAll(context.Background()); err != nil {
 			log.Error("reindex failed", zap.Error(err))

@@ -3,16 +3,16 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"errors"
 	"os"
 	"strconv"
-	"time"
-
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
 )
 
 // ProgressEvent is the payload published by BFF for episode progress.
@@ -27,10 +27,10 @@ type ProgressEvent struct {
 }
 
 // StartProgressConsumer subscribes to activity.progress and applies idempotent upserts to the DB.
-func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Pool) {
+func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Pool, log *zap.Logger) {
 	js, err := nc.JetStream()
 	if err != nil {
-		log.Printf("progress_consumer: jetstream error: %v", err)
+		log.Error("progress_consumer: jetstream error", zap.Error(err))
 		return
 	}
 
@@ -40,14 +40,14 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 		Subjects: []string{"activity.progress"},
 		Storage:  nats.FileStorage,
 	})
-	if err != nil && !strings.Contains(err.Error(), "already in use") {
-		log.Printf("progress_consumer: add stream error: %v", err)
+	if err != nil && !errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
+		log.Error("progress_consumer: add stream error", zap.Error(err))
 		return
 	}
 
 	sub, err := js.PullSubscribe("activity.progress", "activity_progress")
 	if err != nil {
-		log.Printf("progress_consumer: subscribe error: %v", err)
+		log.Error("progress_consumer: subscribe error", zap.Error(err))
 		return
 	}
 
@@ -63,10 +63,10 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 
 			msgs, err := sub.Fetch(batchSize, nats.MaxWait(time.Duration(batchInterval)*time.Millisecond))
 			if err != nil {
-				if err == nats.ErrTimeout {
+				if errors.Is(err, nats.ErrTimeout) {
 					continue
 				}
-				log.Printf("progress_consumer: fetch error: %v", err)
+				log.Error("progress_consumer: fetch error", zap.Error(err))
 				time.Sleep(1 * time.Second)
 				continue
 			}
@@ -77,10 +77,10 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 
 			tx, err := pool.Begin(ctx)
 			if err != nil {
-				log.Printf("progress_consumer: db begin: %v", err)
+				log.Error("progress_consumer: db begin", zap.Error(err))
 				for _, m := range msgs {
 					if err := m.Nak(); err != nil {
-						log.Printf("progress_consumer: nak error: %v", err)
+						log.Warn("progress_consumer: nak error", zap.Error(err))
 					}
 				}
 				continue
@@ -90,7 +90,7 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 			for _, m := range msgs {
 				var ev ProgressEvent
 				if err := json.Unmarshal(m.Data, &ev); err != nil {
-					log.Printf("progress_consumer: invalid json: %v", err)
+					log.Error("progress_consumer: invalid json", zap.Error(err))
 					failed = true
 					break
 				}
@@ -101,12 +101,12 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 						// fallback: apply single message without idempotency in its own tx
 						_ = tx.Rollback(ctx)
 						if err := applyProgressWithoutIdempotency(ctx, pool, &ev); err != nil {
-							log.Printf("progress_consumer: apply without idempotency failed: %v", err)
+							log.Error("progress_consumer: apply without idempotency failed", zap.Error(err))
 							failed = true
 						}
 						if !failed {
 							if err := m.Ack(); err != nil {
-								log.Printf("progress_consumer: ack error: %v", err)
+								log.Warn("progress_consumer: ack error", zap.Error(err))
 							}
 						}
 						// start a new tx for remaining messages
@@ -117,7 +117,7 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 						}
 						continue
 					}
-					log.Printf("progress_consumer: insert processed_events error: %v", err)
+					log.Error("progress_consumer: insert processed_events error", zap.Error(err))
 					failed = true
 					break
 				}
@@ -128,7 +128,7 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 				}
 
 				if err := applyProgressUpsert(ctx, tx, &ev); err != nil {
-					log.Printf("progress_consumer: upsert failed: %v", err)
+					log.Error("progress_consumer: upsert failed", zap.Error(err))
 					failed = true
 					break
 				}
@@ -138,17 +138,17 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 				_ = tx.Rollback(ctx)
 				for _, m := range msgs {
 					if err := m.Nak(); err != nil {
-						log.Printf("progress_consumer: nak error: %v", err)
+						log.Warn("progress_consumer: nak error", zap.Error(err))
 					}
 				}
 				continue
 			}
 
 			if err := tx.Commit(ctx); err != nil {
-				log.Printf("progress_consumer: commit failed: %v", err)
+				log.Error("progress_consumer: commit failed", zap.Error(err))
 				for _, m := range msgs {
 					if err := m.Nak(); err != nil {
-						log.Printf("progress_consumer: nak error: %v", err)
+						log.Warn("progress_consumer: nak error", zap.Error(err))
 					}
 				}
 				continue
@@ -156,7 +156,7 @@ func StartProgressConsumer(ctx context.Context, nc *nats.Conn, pool *pgxpool.Poo
 
 			for _, m := range msgs {
 				if err := m.Ack(); err != nil {
-					log.Printf("progress_consumer: ack error: %v", err)
+					log.Warn("progress_consumer: ack error", zap.Error(err))
 				}
 			}
 		}

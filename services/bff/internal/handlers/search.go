@@ -17,7 +17,7 @@ type searchResponse struct {
 	Total int32                `json:"total"`
 }
 
-func Search(search searchv1.SearchServiceClient) http.HandlerFunc {
+func Search(search searchv1.SearchServiceClient, cache Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -31,7 +31,7 @@ func Search(search searchv1.SearchServiceClient) http.HandlerFunc {
 
 		// Cache key based on raw query
 		key := "Search:" + r.URL.RawQuery
-		if cached, ok := cacheGet(key); ok {
+		if cached, ok := cache.Get(key); ok {
 			api.WriteJSON(w, http.StatusOK, cached)
 			return
 		}
@@ -43,7 +43,7 @@ func Search(search searchv1.SearchServiceClient) http.HandlerFunc {
 			return
 		}
 		out := searchResponse{Hits: resp.GetHits(), Total: resp.GetTotal()}
-		cacheSet(key, out)
+		cache.Set(key, out)
 		api.WriteJSON(w, http.StatusOK, out)
 	}
 }

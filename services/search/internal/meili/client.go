@@ -28,8 +28,11 @@ func New(baseURL, apiKey string) *Client {
 
 func (c *Client) EnsureIndex(ctx context.Context, index string, primaryKey string) error {
 	payload := map[string]string{"uid": index, "primaryKey": primaryKey}
-	b, _ := json.Marshal(payload)
-	_, err := c.do(ctx, http.MethodPost, "/indexes", bytes.NewReader(b))
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal index payload: %w", err)
+	}
+	_, err = c.do(ctx, http.MethodPost, "/indexes", bytes.NewReader(b))
 	if err == nil || strings.Contains(err.Error(), "index already exists") {
 		return nil
 	}
@@ -37,19 +40,28 @@ func (c *Client) EnsureIndex(ctx context.Context, index string, primaryKey strin
 }
 
 func (c *Client) UpdateSettings(ctx context.Context, index string, settings map[string]any) error {
-	b, _ := json.Marshal(settings)
-	_, err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/indexes/%s/settings", index), bytes.NewReader(b))
+	b, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal settings: %w", err)
+	}
+	_, err = c.do(ctx, http.MethodPatch, fmt.Sprintf("/indexes/%s/settings", index), bytes.NewReader(b))
 	return err
 }
 
 func (c *Client) AddDocuments(ctx context.Context, index string, docs any) error {
-	b, _ := json.Marshal(docs)
-	_, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/indexes/%s/documents", index), bytes.NewReader(b))
+	b, err := json.Marshal(docs)
+	if err != nil {
+		return fmt.Errorf("marshal documents: %w", err)
+	}
+	_, err = c.do(ctx, http.MethodPost, fmt.Sprintf("/indexes/%s/documents", index), bytes.NewReader(b))
 	return err
 }
 
 func (c *Client) Search(ctx context.Context, index string, payload any) (SearchResponse, error) {
-	b, _ := json.Marshal(payload)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return SearchResponse{}, fmt.Errorf("marshal search payload: %w", err)
+	}
 	resp, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/indexes/%s/search", index), bytes.NewReader(b))
 	if err != nil {
 		return SearchResponse{}, err
