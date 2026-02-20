@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -48,8 +47,7 @@ func Register(c authv1.AuthServiceClient) http.HandlerFunc {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
 		var req registerRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "Invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
@@ -69,8 +67,7 @@ func Login(c authv1.AuthServiceClient) http.HandlerFunc {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
 		var req loginRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "Invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
@@ -90,8 +87,7 @@ func Refresh(c authv1.AuthServiceClient) http.HandlerFunc {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
 		var req refreshRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "Invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 
@@ -110,8 +106,7 @@ func Logout(c authv1.AuthServiceClient) http.HandlerFunc {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
 		var req refreshRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			api.BadRequest(w, "INVALID_JSON", "Invalid JSON", rid, nil)
+		if !decodeJSON(w, r, rid, &req) {
 			return
 		}
 

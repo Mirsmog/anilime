@@ -32,4 +32,3 @@ func TestGetAnimeByIDs_EmptyRequest(t *testing.T) {
 		t.Fatalf("expected empty anime list, got %d items", len(resp.GetAnime()))
 	}
 }
-

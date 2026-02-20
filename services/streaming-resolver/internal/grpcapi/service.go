@@ -81,6 +81,15 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 		return nil, status.Errorf(codes.Unavailable, "provider sources: status %d", sources.Status)
 	}
 
+	out := buildCachedPlayback(providerEpisodeID, sources)
+
+	if s.Cache != nil {
+		_ = s.Cache.Set(ctx, cacheKey, out)
+	}
+	return toResponse(out), nil
+}
+
+func buildCachedPlayback(providerEpisodeID string, sources *hianime.SourcesResponse) *cachedPlayback {
 	out := &cachedPlayback{ProviderEpisodeID: providerEpisodeID, Headers: sources.Data.Headers}
 	for _, src := range sources.Data.Sources {
 		out.Sources = append(out.Sources, streamingv1.PlaybackSource{Url: src.URL, Quality: src.Type, IsM3U8: src.IsM3U8})
@@ -94,11 +103,7 @@ func (s *ResolverService) GetPlayback(ctx context.Context, req *streamingv1.GetP
 	if sources.Data.Outro.End > 0 {
 		out.Outro = &streamingv1.PlaybackIntroOutro{Start: sources.Data.Outro.Start, End: sources.Data.Outro.End}
 	}
-
-	if s.Cache != nil {
-		_ = s.Cache.Set(ctx, cacheKey, out)
-	}
-	return toResponse(out), nil
+	return out
 }
 
 func (s *ResolverService) resolveProviderEpisode(ctx context.Context, episodeID string) (string, error) {
@@ -129,18 +134,16 @@ func toResponse(c *cachedPlayback) *streamingv1.GetPlaybackResponse {
 }
 
 func selectServer(requested string, servers *hianime.ServersResponse) string {
-	requested = strings.TrimSpace(strings.ToLower(requested))
-	if requested == "" {
-		if len(servers.Data.Sub) > 0 {
-			return servers.Data.Sub[0].ServerName
-		}
-		if len(servers.Data.Dub) > 0 {
-			return servers.Data.Dub[0].ServerName
-		}
-		if len(servers.Data.Raw) > 0 {
-			return servers.Data.Raw[0].ServerName
-		}
-		return ""
+	if requested = strings.TrimSpace(strings.ToLower(requested)); requested != "" {
+		return requested
 	}
-	return requested
+	switch {
+	case len(servers.Data.Sub) > 0:
+		return servers.Data.Sub[0].ServerName
+	case len(servers.Data.Dub) > 0:
+		return servers.Data.Dub[0].ServerName
+	case len(servers.Data.Raw) > 0:
+		return servers.Data.Raw[0].ServerName
+	}
+	return ""
 }
