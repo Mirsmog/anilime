@@ -58,22 +58,6 @@ type JikanAnimeInput struct {
 	Score         float32
 }
 
-// AnimeKaiAnimeInput carries AnimeKai-sourced anime data including episodes.
-type AnimeKaiAnimeInput struct {
-	ProviderAnimeID string
-	Title           string
-	URL             string
-	Image           string
-	Description     string
-	Genres          []string
-	SubOrDub        string
-	Type            string
-	Status          string
-	OtherName       string
-	TotalEpisodes   int32
-	Episodes        []EpisodeInput
-}
-
 // CatalogStore defines all persistence operations for the catalog service.
 type CatalogStore interface {
 	// Anime reads
@@ -84,7 +68,6 @@ type CatalogStore interface {
 	// Anime writes
 	AttachExternalAnimeID(ctx context.Context, provider, externalID, animeID string) error
 	UpsertJikanAnime(ctx context.Context, a JikanAnimeInput) (animeID string, err error)
-	UpsertAnimeKaiAnime(ctx context.Context, a AnimeKaiAnimeInput) (animeID string, episodeIDs []string, err error)
 
 	// Episode reads
 	GetEpisodesByAnimeID(ctx context.Context, animeID string) ([]Episode, error)

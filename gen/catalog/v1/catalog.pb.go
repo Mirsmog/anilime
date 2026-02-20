@@ -7,12 +7,11 @@
 package catalogv1
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -574,302 +573,6 @@ func (x *GetProviderEpisodeIDResponse) GetProviderEpisodeId() string {
 	return ""
 }
 
-type AnimeKaiEpisode struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ProviderEpisodeId string                 `protobuf:"bytes,1,opt,name=provider_episode_id,json=providerEpisodeId,proto3" json:"provider_episode_id,omitempty"`
-	Number            int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
-	Title             string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	Url               string                 `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *AnimeKaiEpisode) Reset() {
-	*x = AnimeKaiEpisode{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AnimeKaiEpisode) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AnimeKaiEpisode) ProtoMessage() {}
-
-func (x *AnimeKaiEpisode) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AnimeKaiEpisode.ProtoReflect.Descriptor instead.
-func (*AnimeKaiEpisode) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *AnimeKaiEpisode) GetProviderEpisodeId() string {
-	if x != nil {
-		return x.ProviderEpisodeId
-	}
-	return ""
-}
-
-func (x *AnimeKaiEpisode) GetNumber() int32 {
-	if x != nil {
-		return x.Number
-	}
-	return 0
-}
-
-func (x *AnimeKaiEpisode) GetTitle() string {
-	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *AnimeKaiEpisode) GetUrl() string {
-	if x != nil {
-		return x.Url
-	}
-	return ""
-}
-
-type AnimeKaiAnime struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ProviderAnimeId string                 `protobuf:"bytes,1,opt,name=provider_anime_id,json=providerAnimeId,proto3" json:"provider_anime_id,omitempty"`
-	Title           string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Url             string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
-	Image           string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
-	Description     string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
-	Genres          []string               `protobuf:"bytes,6,rep,name=genres,proto3" json:"genres,omitempty"`
-	SubOrDub        string                 `protobuf:"bytes,7,opt,name=sub_or_dub,json=subOrDub,proto3" json:"sub_or_dub,omitempty"`
-	Type            string                 `protobuf:"bytes,8,opt,name=type,proto3" json:"type,omitempty"`
-	Status          string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
-	OtherName       string                 `protobuf:"bytes,10,opt,name=other_name,json=otherName,proto3" json:"other_name,omitempty"`
-	TotalEpisodes   int32                  `protobuf:"varint,11,opt,name=total_episodes,json=totalEpisodes,proto3" json:"total_episodes,omitempty"`
-	Episodes        []*AnimeKaiEpisode     `protobuf:"bytes,12,rep,name=episodes,proto3" json:"episodes,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *AnimeKaiAnime) Reset() {
-	*x = AnimeKaiAnime{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AnimeKaiAnime) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AnimeKaiAnime) ProtoMessage() {}
-
-func (x *AnimeKaiAnime) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AnimeKaiAnime.ProtoReflect.Descriptor instead.
-func (*AnimeKaiAnime) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *AnimeKaiAnime) GetProviderAnimeId() string {
-	if x != nil {
-		return x.ProviderAnimeId
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetTitle() string {
-	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetUrl() string {
-	if x != nil {
-		return x.Url
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetImage() string {
-	if x != nil {
-		return x.Image
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetDescription() string {
-	if x != nil {
-		return x.Description
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetGenres() []string {
-	if x != nil {
-		return x.Genres
-	}
-	return nil
-}
-
-func (x *AnimeKaiAnime) GetSubOrDub() string {
-	if x != nil {
-		return x.SubOrDub
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetOtherName() string {
-	if x != nil {
-		return x.OtherName
-	}
-	return ""
-}
-
-func (x *AnimeKaiAnime) GetTotalEpisodes() int32 {
-	if x != nil {
-		return x.TotalEpisodes
-	}
-	return 0
-}
-
-func (x *AnimeKaiAnime) GetEpisodes() []*AnimeKaiEpisode {
-	if x != nil {
-		return x.Episodes
-	}
-	return nil
-}
-
-type UpsertAnimeKaiAnimeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Anime         *AnimeKaiAnime         `protobuf:"bytes,1,opt,name=anime,proto3" json:"anime,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpsertAnimeKaiAnimeRequest) Reset() {
-	*x = UpsertAnimeKaiAnimeRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpsertAnimeKaiAnimeRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpsertAnimeKaiAnimeRequest) ProtoMessage() {}
-
-func (x *UpsertAnimeKaiAnimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpsertAnimeKaiAnimeRequest.ProtoReflect.Descriptor instead.
-func (*UpsertAnimeKaiAnimeRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *UpsertAnimeKaiAnimeRequest) GetAnime() *AnimeKaiAnime {
-	if x != nil {
-		return x.Anime
-	}
-	return nil
-}
-
-type UpsertAnimeKaiAnimeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AnimeId       string                 `protobuf:"bytes,1,opt,name=anime_id,json=animeId,proto3" json:"anime_id,omitempty"`
-	EpisodeIds    []string               `protobuf:"bytes,2,rep,name=episode_ids,json=episodeIds,proto3" json:"episode_ids,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpsertAnimeKaiAnimeResponse) Reset() {
-	*x = UpsertAnimeKaiAnimeResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpsertAnimeKaiAnimeResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpsertAnimeKaiAnimeResponse) ProtoMessage() {}
-
-func (x *UpsertAnimeKaiAnimeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpsertAnimeKaiAnimeResponse.ProtoReflect.Descriptor instead.
-func (*UpsertAnimeKaiAnimeResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *UpsertAnimeKaiAnimeResponse) GetAnimeId() string {
-	if x != nil {
-		return x.AnimeId
-	}
-	return ""
-}
-
-func (x *UpsertAnimeKaiAnimeResponse) GetEpisodeIds() []string {
-	if x != nil {
-		return x.EpisodeIds
-	}
-	return nil
-}
-
 type AttachExternalAnimeIDRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AnimeId       string                 `protobuf:"bytes,1,opt,name=anime_id,json=animeId,proto3" json:"anime_id,omitempty"`
@@ -881,7 +584,7 @@ type AttachExternalAnimeIDRequest struct {
 
 func (x *AttachExternalAnimeIDRequest) Reset() {
 	*x = AttachExternalAnimeIDRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[14]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +596,7 @@ func (x *AttachExternalAnimeIDRequest) String() string {
 func (*AttachExternalAnimeIDRequest) ProtoMessage() {}
 
 func (x *AttachExternalAnimeIDRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[14]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +609,7 @@ func (x *AttachExternalAnimeIDRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachExternalAnimeIDRequest.ProtoReflect.Descriptor instead.
 func (*AttachExternalAnimeIDRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{14}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AttachExternalAnimeIDRequest) GetAnimeId() string {
@@ -938,7 +641,7 @@ type AttachExternalAnimeIDResponse struct {
 
 func (x *AttachExternalAnimeIDResponse) Reset() {
 	*x = AttachExternalAnimeIDResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[15]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -950,7 +653,7 @@ func (x *AttachExternalAnimeIDResponse) String() string {
 func (*AttachExternalAnimeIDResponse) ProtoMessage() {}
 
 func (x *AttachExternalAnimeIDResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[15]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -963,7 +666,7 @@ func (x *AttachExternalAnimeIDResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachExternalAnimeIDResponse.ProtoReflect.Descriptor instead.
 func (*AttachExternalAnimeIDResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{15}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{11}
 }
 
 type ResolveAnimeIDByExternalIDRequest struct {
@@ -976,7 +679,7 @@ type ResolveAnimeIDByExternalIDRequest struct {
 
 func (x *ResolveAnimeIDByExternalIDRequest) Reset() {
 	*x = ResolveAnimeIDByExternalIDRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[16]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -988,7 +691,7 @@ func (x *ResolveAnimeIDByExternalIDRequest) String() string {
 func (*ResolveAnimeIDByExternalIDRequest) ProtoMessage() {}
 
 func (x *ResolveAnimeIDByExternalIDRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[16]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1001,7 +704,7 @@ func (x *ResolveAnimeIDByExternalIDRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveAnimeIDByExternalIDRequest.ProtoReflect.Descriptor instead.
 func (*ResolveAnimeIDByExternalIDRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{16}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ResolveAnimeIDByExternalIDRequest) GetProvider() string {
@@ -1027,7 +730,7 @@ type ResolveAnimeIDByExternalIDResponse struct {
 
 func (x *ResolveAnimeIDByExternalIDResponse) Reset() {
 	*x = ResolveAnimeIDByExternalIDResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[17]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1039,7 +742,7 @@ func (x *ResolveAnimeIDByExternalIDResponse) String() string {
 func (*ResolveAnimeIDByExternalIDResponse) ProtoMessage() {}
 
 func (x *ResolveAnimeIDByExternalIDResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[17]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1052,7 +755,7 @@ func (x *ResolveAnimeIDByExternalIDResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveAnimeIDByExternalIDResponse.ProtoReflect.Descriptor instead.
 func (*ResolveAnimeIDByExternalIDResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{17}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResolveAnimeIDByExternalIDResponse) GetAnimeId() string {
@@ -1074,7 +777,7 @@ type HiAnimeEpisode struct {
 
 func (x *HiAnimeEpisode) Reset() {
 	*x = HiAnimeEpisode{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[18]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +789,7 @@ func (x *HiAnimeEpisode) String() string {
 func (*HiAnimeEpisode) ProtoMessage() {}
 
 func (x *HiAnimeEpisode) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[18]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +802,7 @@ func (x *HiAnimeEpisode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HiAnimeEpisode.ProtoReflect.Descriptor instead.
 func (*HiAnimeEpisode) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{18}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *HiAnimeEpisode) GetProviderEpisodeId() string {
@@ -1141,7 +844,7 @@ type UpsertHiAnimeEpisodesRequest struct {
 
 func (x *UpsertHiAnimeEpisodesRequest) Reset() {
 	*x = UpsertHiAnimeEpisodesRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[19]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +856,7 @@ func (x *UpsertHiAnimeEpisodesRequest) String() string {
 func (*UpsertHiAnimeEpisodesRequest) ProtoMessage() {}
 
 func (x *UpsertHiAnimeEpisodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[19]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,7 +869,7 @@ func (x *UpsertHiAnimeEpisodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertHiAnimeEpisodesRequest.ProtoReflect.Descriptor instead.
 func (*UpsertHiAnimeEpisodesRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{19}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UpsertHiAnimeEpisodesRequest) GetAnimeId() string {
@@ -1199,7 +902,7 @@ type UpsertHiAnimeEpisodesResponse struct {
 
 func (x *UpsertHiAnimeEpisodesResponse) Reset() {
 	*x = UpsertHiAnimeEpisodesResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[20]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1211,7 +914,7 @@ func (x *UpsertHiAnimeEpisodesResponse) String() string {
 func (*UpsertHiAnimeEpisodesResponse) ProtoMessage() {}
 
 func (x *UpsertHiAnimeEpisodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[20]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1224,7 +927,7 @@ func (x *UpsertHiAnimeEpisodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertHiAnimeEpisodesResponse.ProtoReflect.Descriptor instead.
 func (*UpsertHiAnimeEpisodesResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{20}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpsertHiAnimeEpisodesResponse) GetEpisodeIds() []string {
@@ -1253,7 +956,7 @@ type JikanAnime struct {
 
 func (x *JikanAnime) Reset() {
 	*x = JikanAnime{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[21]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1265,7 +968,7 @@ func (x *JikanAnime) String() string {
 func (*JikanAnime) ProtoMessage() {}
 
 func (x *JikanAnime) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[21]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1278,7 +981,7 @@ func (x *JikanAnime) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JikanAnime.ProtoReflect.Descriptor instead.
 func (*JikanAnime) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{21}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *JikanAnime) GetMalId() int32 {
@@ -1367,7 +1070,7 @@ type GetEpisodesByAnimeIDRequest struct {
 
 func (x *GetEpisodesByAnimeIDRequest) Reset() {
 	*x = GetEpisodesByAnimeIDRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[22]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1379,7 +1082,7 @@ func (x *GetEpisodesByAnimeIDRequest) String() string {
 func (*GetEpisodesByAnimeIDRequest) ProtoMessage() {}
 
 func (x *GetEpisodesByAnimeIDRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[22]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1392,7 +1095,7 @@ func (x *GetEpisodesByAnimeIDRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEpisodesByAnimeIDRequest.ProtoReflect.Descriptor instead.
 func (*GetEpisodesByAnimeIDRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{22}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetEpisodesByAnimeIDRequest) GetAnimeId() string {
@@ -1411,7 +1114,7 @@ type GetEpisodesByAnimeIDResponse struct {
 
 func (x *GetEpisodesByAnimeIDResponse) Reset() {
 	*x = GetEpisodesByAnimeIDResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[23]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1126,7 @@ func (x *GetEpisodesByAnimeIDResponse) String() string {
 func (*GetEpisodesByAnimeIDResponse) ProtoMessage() {}
 
 func (x *GetEpisodesByAnimeIDResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[23]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1139,7 @@ func (x *GetEpisodesByAnimeIDResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEpisodesByAnimeIDResponse.ProtoReflect.Descriptor instead.
 func (*GetEpisodesByAnimeIDResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{23}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetEpisodesByAnimeIDResponse) GetEpisodes() []*Episode {
@@ -1455,7 +1158,7 @@ type UpsertJikanAnimeRequest struct {
 
 func (x *UpsertJikanAnimeRequest) Reset() {
 	*x = UpsertJikanAnimeRequest{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[24]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1467,7 +1170,7 @@ func (x *UpsertJikanAnimeRequest) String() string {
 func (*UpsertJikanAnimeRequest) ProtoMessage() {}
 
 func (x *UpsertJikanAnimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[24]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1480,7 +1183,7 @@ func (x *UpsertJikanAnimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertJikanAnimeRequest.ProtoReflect.Descriptor instead.
 func (*UpsertJikanAnimeRequest) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{24}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *UpsertJikanAnimeRequest) GetAnime() *JikanAnime {
@@ -1499,7 +1202,7 @@ type UpsertJikanAnimeResponse struct {
 
 func (x *UpsertJikanAnimeResponse) Reset() {
 	*x = UpsertJikanAnimeResponse{}
-	mi := &file_catalog_v1_catalog_proto_msgTypes[25]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1511,7 +1214,7 @@ func (x *UpsertJikanAnimeResponse) String() string {
 func (*UpsertJikanAnimeResponse) ProtoMessage() {}
 
 func (x *UpsertJikanAnimeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_catalog_v1_catalog_proto_msgTypes[25]
+	mi := &file_catalog_v1_catalog_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1524,7 +1227,7 @@ func (x *UpsertJikanAnimeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertJikanAnimeResponse.ProtoReflect.Descriptor instead.
 func (*UpsertJikanAnimeResponse) Descriptor() ([]byte, []int) {
-	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{25}
+	return file_catalog_v1_catalog_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *UpsertJikanAnimeResponse) GetAnimeId() string {
@@ -1576,34 +1279,7 @@ const file_catalog_v1_catalog_proto_rawDesc = "" +
 	"episode_id\x18\x01 \x01(\tR\tepisodeId\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\"N\n" +
 	"\x1cGetProviderEpisodeIDResponse\x12.\n" +
-	"\x13provider_episode_id\x18\x01 \x01(\tR\x11providerEpisodeId\"\x81\x01\n" +
-	"\x0fAnimeKaiEpisode\x12.\n" +
-	"\x13provider_episode_id\x18\x01 \x01(\tR\x11providerEpisodeId\x12\x16\n" +
-	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\x12\x10\n" +
-	"\x03url\x18\x04 \x01(\tR\x03url\"\xfc\x02\n" +
-	"\rAnimeKaiAnime\x12*\n" +
-	"\x11provider_anime_id\x18\x01 \x01(\tR\x0fproviderAnimeId\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
-	"\x03url\x18\x03 \x01(\tR\x03url\x12\x14\n" +
-	"\x05image\x18\x04 \x01(\tR\x05image\x12 \n" +
-	"\vdescription\x18\x05 \x01(\tR\vdescription\x12\x16\n" +
-	"\x06genres\x18\x06 \x03(\tR\x06genres\x12\x1c\n" +
-	"\n" +
-	"sub_or_dub\x18\a \x01(\tR\bsubOrDub\x12\x12\n" +
-	"\x04type\x18\b \x01(\tR\x04type\x12\x16\n" +
-	"\x06status\x18\t \x01(\tR\x06status\x12\x1d\n" +
-	"\n" +
-	"other_name\x18\n" +
-	" \x01(\tR\totherName\x12%\n" +
-	"\x0etotal_episodes\x18\v \x01(\x05R\rtotalEpisodes\x127\n" +
-	"\bepisodes\x18\f \x03(\v2\x1b.catalog.v1.AnimeKaiEpisodeR\bepisodes\"M\n" +
-	"\x1aUpsertAnimeKaiAnimeRequest\x12/\n" +
-	"\x05anime\x18\x01 \x01(\v2\x19.catalog.v1.AnimeKaiAnimeR\x05anime\"Y\n" +
-	"\x1bUpsertAnimeKaiAnimeResponse\x12\x19\n" +
-	"\banime_id\x18\x01 \x01(\tR\aanimeId\x12\x1f\n" +
-	"\vepisode_ids\x18\x02 \x03(\tR\n" +
-	"episodeIds\"v\n" +
+	"\x13provider_episode_id\x18\x01 \x01(\tR\x11providerEpisodeId\"v\n" +
 	"\x1cAttachExternalAnimeIDRequest\x12\x19\n" +
 	"\banime_id\x18\x01 \x01(\tR\aanimeId\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x1f\n" +
@@ -1649,14 +1325,13 @@ const file_catalog_v1_catalog_proto_rawDesc = "" +
 	"\x17UpsertJikanAnimeRequest\x12,\n" +
 	"\x05anime\x18\x01 \x01(\v2\x16.catalog.v1.JikanAnimeR\x05anime\"5\n" +
 	"\x18UpsertJikanAnimeResponse\x12\x19\n" +
-	"\banime_id\x18\x01 \x01(\tR\aanimeId2\x8b\b\n" +
+	"\banime_id\x18\x01 \x01(\tR\aanimeId2\xa3\a\n" +
 	"\x0eCatalogService\x12]\n" +
 	"\x10GetEpisodesByIDs\x12#.catalog.v1.GetEpisodesByIDsRequest\x1a$.catalog.v1.GetEpisodesByIDsResponse\x12i\n" +
 	"\x14GetProviderEpisodeID\x12'.catalog.v1.GetProviderEpisodeIDRequest\x1a(.catalog.v1.GetProviderEpisodeIDResponse\x12T\n" +
 	"\rGetAnimeByIDs\x12 .catalog.v1.GetAnimeByIDsRequest\x1a!.catalog.v1.GetAnimeByIDsResponse\x12N\n" +
 	"\vGetAnimeIDs\x12\x1e.catalog.v1.GetAnimeIDsRequest\x1a\x1f.catalog.v1.GetAnimeIDsResponse\x12i\n" +
-	"\x14GetEpisodesByAnimeID\x12'.catalog.v1.GetEpisodesByAnimeIDRequest\x1a(.catalog.v1.GetEpisodesByAnimeIDResponse\x12f\n" +
-	"\x13UpsertAnimeKaiAnime\x12&.catalog.v1.UpsertAnimeKaiAnimeRequest\x1a'.catalog.v1.UpsertAnimeKaiAnimeResponse\x12l\n" +
+	"\x14GetEpisodesByAnimeID\x12'.catalog.v1.GetEpisodesByAnimeIDRequest\x1a(.catalog.v1.GetEpisodesByAnimeIDResponse\x12l\n" +
 	"\x15AttachExternalAnimeID\x12(.catalog.v1.AttachExternalAnimeIDRequest\x1a).catalog.v1.AttachExternalAnimeIDResponse\x12{\n" +
 	"\x1aResolveAnimeIDByExternalID\x12-.catalog.v1.ResolveAnimeIDByExternalIDRequest\x1a..catalog.v1.ResolveAnimeIDByExternalIDResponse\x12l\n" +
 	"\x15UpsertHiAnimeEpisodes\x12(.catalog.v1.UpsertHiAnimeEpisodesRequest\x1a).catalog.v1.UpsertHiAnimeEpisodesResponse\x12]\n" +
@@ -1677,7 +1352,7 @@ func file_catalog_v1_catalog_proto_rawDescGZIP() []byte {
 	return file_catalog_v1_catalog_proto_rawDescData
 }
 
-var file_catalog_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_catalog_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_catalog_v1_catalog_proto_goTypes = []any{
 	(*Episode)(nil),                            // 0: catalog.v1.Episode
 	(*Anime)(nil),                              // 1: catalog.v1.Anime
@@ -1689,56 +1364,48 @@ var file_catalog_v1_catalog_proto_goTypes = []any{
 	(*GetEpisodesByIDsResponse)(nil),           // 7: catalog.v1.GetEpisodesByIDsResponse
 	(*GetProviderEpisodeIDRequest)(nil),        // 8: catalog.v1.GetProviderEpisodeIDRequest
 	(*GetProviderEpisodeIDResponse)(nil),       // 9: catalog.v1.GetProviderEpisodeIDResponse
-	(*AnimeKaiEpisode)(nil),                    // 10: catalog.v1.AnimeKaiEpisode
-	(*AnimeKaiAnime)(nil),                      // 11: catalog.v1.AnimeKaiAnime
-	(*UpsertAnimeKaiAnimeRequest)(nil),         // 12: catalog.v1.UpsertAnimeKaiAnimeRequest
-	(*UpsertAnimeKaiAnimeResponse)(nil),        // 13: catalog.v1.UpsertAnimeKaiAnimeResponse
-	(*AttachExternalAnimeIDRequest)(nil),       // 14: catalog.v1.AttachExternalAnimeIDRequest
-	(*AttachExternalAnimeIDResponse)(nil),      // 15: catalog.v1.AttachExternalAnimeIDResponse
-	(*ResolveAnimeIDByExternalIDRequest)(nil),  // 16: catalog.v1.ResolveAnimeIDByExternalIDRequest
-	(*ResolveAnimeIDByExternalIDResponse)(nil), // 17: catalog.v1.ResolveAnimeIDByExternalIDResponse
-	(*HiAnimeEpisode)(nil),                     // 18: catalog.v1.HiAnimeEpisode
-	(*UpsertHiAnimeEpisodesRequest)(nil),       // 19: catalog.v1.UpsertHiAnimeEpisodesRequest
-	(*UpsertHiAnimeEpisodesResponse)(nil),      // 20: catalog.v1.UpsertHiAnimeEpisodesResponse
-	(*JikanAnime)(nil),                         // 21: catalog.v1.JikanAnime
-	(*GetEpisodesByAnimeIDRequest)(nil),        // 22: catalog.v1.GetEpisodesByAnimeIDRequest
-	(*GetEpisodesByAnimeIDResponse)(nil),       // 23: catalog.v1.GetEpisodesByAnimeIDResponse
-	(*UpsertJikanAnimeRequest)(nil),            // 24: catalog.v1.UpsertJikanAnimeRequest
-	(*UpsertJikanAnimeResponse)(nil),           // 25: catalog.v1.UpsertJikanAnimeResponse
+	(*AttachExternalAnimeIDRequest)(nil),       // 10: catalog.v1.AttachExternalAnimeIDRequest
+	(*AttachExternalAnimeIDResponse)(nil),      // 11: catalog.v1.AttachExternalAnimeIDResponse
+	(*ResolveAnimeIDByExternalIDRequest)(nil),  // 12: catalog.v1.ResolveAnimeIDByExternalIDRequest
+	(*ResolveAnimeIDByExternalIDResponse)(nil), // 13: catalog.v1.ResolveAnimeIDByExternalIDResponse
+	(*HiAnimeEpisode)(nil),                     // 14: catalog.v1.HiAnimeEpisode
+	(*UpsertHiAnimeEpisodesRequest)(nil),       // 15: catalog.v1.UpsertHiAnimeEpisodesRequest
+	(*UpsertHiAnimeEpisodesResponse)(nil),      // 16: catalog.v1.UpsertHiAnimeEpisodesResponse
+	(*JikanAnime)(nil),                         // 17: catalog.v1.JikanAnime
+	(*GetEpisodesByAnimeIDRequest)(nil),        // 18: catalog.v1.GetEpisodesByAnimeIDRequest
+	(*GetEpisodesByAnimeIDResponse)(nil),       // 19: catalog.v1.GetEpisodesByAnimeIDResponse
+	(*UpsertJikanAnimeRequest)(nil),            // 20: catalog.v1.UpsertJikanAnimeRequest
+	(*UpsertJikanAnimeResponse)(nil),           // 21: catalog.v1.UpsertJikanAnimeResponse
 }
 var file_catalog_v1_catalog_proto_depIdxs = []int32{
 	1,  // 0: catalog.v1.GetAnimeByIDsResponse.anime:type_name -> catalog.v1.Anime
 	0,  // 1: catalog.v1.GetEpisodesByIDsResponse.episodes:type_name -> catalog.v1.Episode
-	10, // 2: catalog.v1.AnimeKaiAnime.episodes:type_name -> catalog.v1.AnimeKaiEpisode
-	11, // 3: catalog.v1.UpsertAnimeKaiAnimeRequest.anime:type_name -> catalog.v1.AnimeKaiAnime
-	18, // 4: catalog.v1.UpsertHiAnimeEpisodesRequest.episodes:type_name -> catalog.v1.HiAnimeEpisode
-	0,  // 5: catalog.v1.GetEpisodesByAnimeIDResponse.episodes:type_name -> catalog.v1.Episode
-	21, // 6: catalog.v1.UpsertJikanAnimeRequest.anime:type_name -> catalog.v1.JikanAnime
-	6,  // 7: catalog.v1.CatalogService.GetEpisodesByIDs:input_type -> catalog.v1.GetEpisodesByIDsRequest
-	8,  // 8: catalog.v1.CatalogService.GetProviderEpisodeID:input_type -> catalog.v1.GetProviderEpisodeIDRequest
-	2,  // 9: catalog.v1.CatalogService.GetAnimeByIDs:input_type -> catalog.v1.GetAnimeByIDsRequest
-	4,  // 10: catalog.v1.CatalogService.GetAnimeIDs:input_type -> catalog.v1.GetAnimeIDsRequest
-	22, // 11: catalog.v1.CatalogService.GetEpisodesByAnimeID:input_type -> catalog.v1.GetEpisodesByAnimeIDRequest
-	12, // 12: catalog.v1.CatalogService.UpsertAnimeKaiAnime:input_type -> catalog.v1.UpsertAnimeKaiAnimeRequest
-	14, // 13: catalog.v1.CatalogService.AttachExternalAnimeID:input_type -> catalog.v1.AttachExternalAnimeIDRequest
-	16, // 14: catalog.v1.CatalogService.ResolveAnimeIDByExternalID:input_type -> catalog.v1.ResolveAnimeIDByExternalIDRequest
-	19, // 15: catalog.v1.CatalogService.UpsertHiAnimeEpisodes:input_type -> catalog.v1.UpsertHiAnimeEpisodesRequest
-	24, // 16: catalog.v1.CatalogService.UpsertJikanAnime:input_type -> catalog.v1.UpsertJikanAnimeRequest
-	7,  // 17: catalog.v1.CatalogService.GetEpisodesByIDs:output_type -> catalog.v1.GetEpisodesByIDsResponse
-	9,  // 18: catalog.v1.CatalogService.GetProviderEpisodeID:output_type -> catalog.v1.GetProviderEpisodeIDResponse
-	3,  // 19: catalog.v1.CatalogService.GetAnimeByIDs:output_type -> catalog.v1.GetAnimeByIDsResponse
-	5,  // 20: catalog.v1.CatalogService.GetAnimeIDs:output_type -> catalog.v1.GetAnimeIDsResponse
-	23, // 21: catalog.v1.CatalogService.GetEpisodesByAnimeID:output_type -> catalog.v1.GetEpisodesByAnimeIDResponse
-	13, // 22: catalog.v1.CatalogService.UpsertAnimeKaiAnime:output_type -> catalog.v1.UpsertAnimeKaiAnimeResponse
-	15, // 23: catalog.v1.CatalogService.AttachExternalAnimeID:output_type -> catalog.v1.AttachExternalAnimeIDResponse
-	17, // 24: catalog.v1.CatalogService.ResolveAnimeIDByExternalID:output_type -> catalog.v1.ResolveAnimeIDByExternalIDResponse
-	20, // 25: catalog.v1.CatalogService.UpsertHiAnimeEpisodes:output_type -> catalog.v1.UpsertHiAnimeEpisodesResponse
-	25, // 26: catalog.v1.CatalogService.UpsertJikanAnime:output_type -> catalog.v1.UpsertJikanAnimeResponse
-	17, // [17:27] is the sub-list for method output_type
-	7,  // [7:17] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	14, // 2: catalog.v1.UpsertHiAnimeEpisodesRequest.episodes:type_name -> catalog.v1.HiAnimeEpisode
+	0,  // 3: catalog.v1.GetEpisodesByAnimeIDResponse.episodes:type_name -> catalog.v1.Episode
+	17, // 4: catalog.v1.UpsertJikanAnimeRequest.anime:type_name -> catalog.v1.JikanAnime
+	6,  // 5: catalog.v1.CatalogService.GetEpisodesByIDs:input_type -> catalog.v1.GetEpisodesByIDsRequest
+	8,  // 6: catalog.v1.CatalogService.GetProviderEpisodeID:input_type -> catalog.v1.GetProviderEpisodeIDRequest
+	2,  // 7: catalog.v1.CatalogService.GetAnimeByIDs:input_type -> catalog.v1.GetAnimeByIDsRequest
+	4,  // 8: catalog.v1.CatalogService.GetAnimeIDs:input_type -> catalog.v1.GetAnimeIDsRequest
+	18, // 9: catalog.v1.CatalogService.GetEpisodesByAnimeID:input_type -> catalog.v1.GetEpisodesByAnimeIDRequest
+	10, // 10: catalog.v1.CatalogService.AttachExternalAnimeID:input_type -> catalog.v1.AttachExternalAnimeIDRequest
+	12, // 11: catalog.v1.CatalogService.ResolveAnimeIDByExternalID:input_type -> catalog.v1.ResolveAnimeIDByExternalIDRequest
+	15, // 12: catalog.v1.CatalogService.UpsertHiAnimeEpisodes:input_type -> catalog.v1.UpsertHiAnimeEpisodesRequest
+	20, // 13: catalog.v1.CatalogService.UpsertJikanAnime:input_type -> catalog.v1.UpsertJikanAnimeRequest
+	7,  // 14: catalog.v1.CatalogService.GetEpisodesByIDs:output_type -> catalog.v1.GetEpisodesByIDsResponse
+	9,  // 15: catalog.v1.CatalogService.GetProviderEpisodeID:output_type -> catalog.v1.GetProviderEpisodeIDResponse
+	3,  // 16: catalog.v1.CatalogService.GetAnimeByIDs:output_type -> catalog.v1.GetAnimeByIDsResponse
+	5,  // 17: catalog.v1.CatalogService.GetAnimeIDs:output_type -> catalog.v1.GetAnimeIDsResponse
+	19, // 18: catalog.v1.CatalogService.GetEpisodesByAnimeID:output_type -> catalog.v1.GetEpisodesByAnimeIDResponse
+	11, // 19: catalog.v1.CatalogService.AttachExternalAnimeID:output_type -> catalog.v1.AttachExternalAnimeIDResponse
+	13, // 20: catalog.v1.CatalogService.ResolveAnimeIDByExternalID:output_type -> catalog.v1.ResolveAnimeIDByExternalIDResponse
+	16, // 21: catalog.v1.CatalogService.UpsertHiAnimeEpisodes:output_type -> catalog.v1.UpsertHiAnimeEpisodesResponse
+	21, // 22: catalog.v1.CatalogService.UpsertJikanAnime:output_type -> catalog.v1.UpsertJikanAnimeResponse
+	14, // [14:23] is the sub-list for method output_type
+	5,  // [5:14] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_catalog_v1_catalog_proto_init() }
@@ -1752,7 +1419,7 @@ func file_catalog_v1_catalog_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_catalog_v1_catalog_proto_rawDesc), len(file_catalog_v1_catalog_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

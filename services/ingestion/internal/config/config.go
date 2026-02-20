@@ -9,7 +9,6 @@ import (
 
 type Config struct {
 	CatalogGRPCAddr string
-	AnimeKaiBaseURL string
 	HiAnimeBaseURL  string
 	JikanBaseURL    string
 	NATSURL         string
@@ -21,10 +20,6 @@ func Load() (Config, error) {
 	addr := strings.TrimSpace(os.Getenv("CATALOG_GRPC_ADDR"))
 	if addr == "" {
 		return Config{}, errors.New("CATALOG_GRPC_ADDR is required")
-	}
-	base := strings.TrimSpace(os.Getenv("ANIMEKAI_BASE_URL"))
-	if base == "" {
-		base = "https://api.consumet.org/anime/animekai"
 	}
 	hia := strings.TrimSpace(os.Getenv("HIANIME_BASE_URL"))
 	if hia == "" {
@@ -53,5 +48,5 @@ func Load() (Config, error) {
 		}
 	}
 
-	return Config{CatalogGRPCAddr: addr, AnimeKaiBaseURL: base, HiAnimeBaseURL: hia, JikanBaseURL: jikanURL, NATSURL: natsURL, JikanRPS: jikanRPS, HiAnimeRPS: hiaRPS}, nil
+	return Config{CatalogGRPCAddr: addr, HiAnimeBaseURL: hia, JikanBaseURL: jikanURL, NATSURL: natsURL, JikanRPS: jikanRPS, HiAnimeRPS: hiaRPS}, nil
 }
