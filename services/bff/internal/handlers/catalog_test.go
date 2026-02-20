@@ -196,7 +196,7 @@ func TestListAnime_OK(t *testing.T) {
 			},
 		},
 	}
-	handler := ListAnime(stub)
+	handler := ListAnime(stub, NewTTLCache(0, nil, ""))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime?limit=2&offset=0", nil))
 
@@ -225,7 +225,7 @@ func TestListAnime_OffsetBeyondTotal(t *testing.T) {
 	stub := &stubCatalogClient{
 		getAnimeIDsResp: &catalogv1.GetAnimeIDsResponse{AnimeIds: []string{"a1"}},
 	}
-	handler := ListAnime(stub)
+	handler := ListAnime(stub, NewTTLCache(0, nil, ""))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, chiReq("/v1/anime?offset=100", nil))
 

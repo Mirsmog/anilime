@@ -64,7 +64,7 @@ func main() {
 		log.Error("nats connect", zap.Error(err))
 	} else {
 		// start worker that consumes progress events and writes to DB
-		go worker.StartProgressConsumer(ctx, nc, pool)
+		go worker.StartProgressConsumer(ctx, nc, pool, log)
 		defer nc.Close()
 	}
 

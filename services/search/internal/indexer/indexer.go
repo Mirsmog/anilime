@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ const (
 	indexName      = "anime"
 )
 
-type Config struct {
+type Indexer struct {
 	CatalogClient catalogv1.CatalogServiceClient
 	Meili         *meili.Client
 	Log           *zap.Logger
@@ -45,7 +46,7 @@ type AnimeDoc struct {
 	TotalEpisodes int32    `json:"total_episodes"`
 }
 
-func (c *Config) EnsureIndex(ctx context.Context) error {
+func (c *Indexer) EnsureIndex(ctx context.Context) error {
 	if err := c.Meili.EnsureIndex(ctx, indexName, "anime_id"); err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func (c *Config) EnsureIndex(ctx context.Context) error {
 	return c.Meili.UpdateSettings(ctx, indexName, settings)
 }
 
-func (c *Config) Run(ctx context.Context) error {
+func (c *Indexer) Run(ctx context.Context) error {
 	if err := c.EnsureIndex(ctx); err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func (c *Config) Run(ctx context.Context) error {
 		Storage:  nats.FileStorage,
 		MaxAge:   7 * 24 * time.Hour,
 	})
-	if err != nil && err != nats.ErrStreamNameAlreadyInUse {
+	if err != nil && !errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
 		return err
 	}
 
@@ -95,7 +96,7 @@ func (c *Config) Run(ctx context.Context) error {
 
 		msgs, err := sub.Fetch(1, nats.MaxWait(2*time.Second))
 		if err != nil {
-			if err == nats.ErrTimeout {
+			if errors.Is(err, nats.ErrTimeout) {
 				continue
 			}
 			return err
@@ -111,7 +112,7 @@ func (c *Config) Run(ctx context.Context) error {
 	}
 }
 
-func (c *Config) handleMsg(ctx context.Context, msg *nats.Msg) error {
+func (c *Indexer) handleMsg(ctx context.Context, msg *nats.Msg) error {
 	var payload EventPayload
 	if err := json.Unmarshal(msg.Data, &payload); err != nil {
 		return err
@@ -123,7 +124,7 @@ func (c *Config) handleMsg(ctx context.Context, msg *nats.Msg) error {
 	return c.indexAnime(ctx, payload.AnimeID)
 }
 
-func (c *Config) reindexLoop(ctx context.Context) {
+func (c *Indexer) reindexLoop(ctx context.Context) {
 	ticker := time.NewTicker(c.ReindexEvery)
 	defer ticker.Stop()
 	for {
@@ -138,7 +139,7 @@ func (c *Config) reindexLoop(ctx context.Context) {
 	}
 }
 
-func (c *Config) ReindexAll(ctx context.Context) error {
+func (c *Indexer) ReindexAll(ctx context.Context) error {
 	ids, err := c.fetchAllAnimeIDs(ctx)
 	if err != nil {
 		return err
@@ -151,7 +152,7 @@ func (c *Config) ReindexAll(ctx context.Context) error {
 	return nil
 }
 
-func (c *Config) fetchAllAnimeIDs(ctx context.Context) ([]string, error) {
+func (c *Indexer) fetchAllAnimeIDs(ctx context.Context) ([]string, error) {
 	resp, err := c.CatalogClient.GetAnimeIDs(ctx, &catalogv1.GetAnimeIDsRequest{})
 	if err != nil {
 		return nil, err
@@ -159,7 +160,7 @@ func (c *Config) fetchAllAnimeIDs(ctx context.Context) ([]string, error) {
 	return resp.AnimeIds, nil
 }
 
-func (c *Config) indexAnime(ctx context.Context, animeID string) error {
+func (c *Indexer) indexAnime(ctx context.Context, animeID string) error {
 	resp, err := c.CatalogClient.GetAnimeByIDs(ctx, &catalogv1.GetAnimeByIDsRequest{AnimeIds: []string{animeID}})
 	if err != nil {
 		return err

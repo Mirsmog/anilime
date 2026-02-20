@@ -1,77 +1,76 @@
 package handlers
 
 import (
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 )
 
+// Cache is the minimal read/write interface for the BFF response cache.
+// Implementations must be safe for concurrent use.
+type Cache interface {
+	Get(key string) (any, bool)
+	Set(key string, v any)
+}
+
 type cacheItem struct {
-	val       interface{}
+	val       any
 	expiresAt time.Time
 }
 
-var (
-	bffCache = struct {
-		mu    sync.RWMutex
-		items map[string]cacheItem
-		ttl   time.Duration
-	}{
-		items: make(map[string]cacheItem),
-		ttl:   60 * time.Second,
-	}
-)
+// TTLCache is an in-memory Cache with per-entry expiry and optional NATS invalidation.
+type TTLCache struct {
+	mu    sync.RWMutex
+	items map[string]cacheItem
+	ttl   time.Duration
+}
 
-// InitCache initializes the in-memory TTL cache and subscribes to NATS subject for invalidation.
-func InitCache(ttlSec int, nc *nats.Conn, subj string) {
+// NewTTLCache creates a TTLCache and wires up NATS key-level invalidation when nc is non-nil.
+func NewTTLCache(ttlSec int, nc *nats.Conn, subj string) *TTLCache {
 	if ttlSec <= 0 {
 		ttlSec = 60
 	}
-	bffCache.mu.Lock()
-	bffCache.ttl = time.Duration(ttlSec) * time.Second
-	if bffCache.items == nil {
-		bffCache.items = make(map[string]cacheItem)
+	c := &TTLCache{
+		items: make(map[string]cacheItem),
+		ttl:   time.Duration(ttlSec) * time.Second,
 	}
-	bffCache.mu.Unlock()
-
-	if nc == nil || subj == "" {
-		return
+	if nc != nil && subj != "" {
+		_, _ = nc.Subscribe(subj, func(m *nats.Msg) {
+			key := string(m.Data)
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			if key == "" || strings.EqualFold(key, "ALL") {
+				c.items = make(map[string]cacheItem)
+				return
+			}
+			delete(c.items, key)
+		})
 	}
-	_, _ = nc.Subscribe(subj, func(m *nats.Msg) {
-		key := string(m.Data)
-		bffCache.mu.Lock()
-		defer bffCache.mu.Unlock()
-		if key == "" || key == "ALL" || key == "all" {
-			bffCache.items = make(map[string]cacheItem)
-			return
-		}
-		delete(bffCache.items, key)
-	})
+	return c
 }
 
-func cacheGet(key string) (interface{}, bool) {
-	bffCache.mu.RLock()
-	it, ok := bffCache.items[key]
-	bffCache.mu.RUnlock()
+func (c *TTLCache) Get(key string) (any, bool) {
+	c.mu.RLock()
+	it, ok := c.items[key]
+	c.mu.RUnlock()
 	if !ok {
 		return nil, false
 	}
 	if time.Now().After(it.expiresAt) {
-		bffCache.mu.Lock()
-		if cur, ok2 := bffCache.items[key]; ok2 {
-			if time.Now().After(cur.expiresAt) {
-				delete(bffCache.items, key)
-			}
+		c.mu.Lock()
+		if cur, ok2 := c.items[key]; ok2 && time.Now().After(cur.expiresAt) {
+			delete(c.items, key)
 		}
-		bffCache.mu.Unlock()
+		c.mu.Unlock()
 		return nil, false
 	}
 	return it.val, true
 }
 
-func cacheSet(key string, v interface{}) {
-	bffCache.mu.Lock()
-	bffCache.items[key] = cacheItem{val: v, expiresAt: time.Now().Add(bffCache.ttl)}
-	bffCache.mu.Unlock()
+func (c *TTLCache) Set(key string, v any) {
+	c.mu.Lock()
+	c.items[key] = cacheItem{val: v, expiresAt: time.Now().Add(c.ttl)}
+	c.mu.Unlock()
 }

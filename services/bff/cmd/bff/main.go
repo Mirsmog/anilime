@@ -6,10 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/metadata"
 
-	authv1 "github.com/example/anime-platform/gen/auth/v1"
-	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
@@ -59,9 +56,8 @@ func main() {
 	}
 
 	// init bff cache with NATS invalidation
-	bffhandlers.InitCache(bffCfg.CacheTTLSeconds, nc, bffCfg.CacheInvalidationSubj)
-	// provide JetStream to handlers for async publishes
-	bffhandlers.SetJetStream(js)
+	bffCache := bffhandlers.NewTTLCache(bffCfg.CacheTTLSeconds, nc, bffCfg.CacheInvalidationSubj)
+	eventPublisher := bffhandlers.NewEventPublisher(js)
 	authc, err := grpcclient.NewAuthClient(bffCfg.AuthGRPCAddr)
 	if err != nil {
 		log.Error("init auth grpc client", zap.Error(err))
@@ -120,7 +116,7 @@ func main() {
 		r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
 	})
 
-	r.Get("/v1/search", bffhandlers.Search(searchc.Client))
+	r.Get("/v1/search", bffhandlers.Search(searchc.Client, bffCache))
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))
@@ -136,43 +132,22 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))
 
-		r.Get("/v1/me", func(w http.ResponseWriter, r *http.Request) {
-			uid, _ := auth.UserIDFromContext(r.Context())
-			resp := map[string]any{"user_id": uid}
+		r.Get("/v1/me", bffhandlers.Me(authc.Client))
 
-			// Enrich with email/username from auth service
-			authzHeader := r.Header.Get("Authorization")
-			if authzHeader != "" {
-				md := metadata.New(map[string]string{"authorization": authzHeader})
-				ctx := metadata.NewOutgoingContext(r.Context(), md)
-				me, err := authc.Client.Me(ctx, &authv1.MeRequest{})
-				if err == nil {
-					if me.GetEmail() != "" {
-						resp["email"] = me.GetEmail()
-					}
-					if me.GetUsername() != "" {
-						resp["username"] = me.GetUsername()
-					}
-				}
-			}
-
-			api.WriteJSON(w, http.StatusOK, resp)
-		})
-
-		r.Post("/v1/activity/progress", bffhandlers.UpsertProgress(activityc.Client))
+		r.Post("/v1/activity/progress", bffhandlers.UpsertProgress(activityc.Client, eventPublisher))
 		r.Get("/v1/activity/continue", bffhandlers.ContinueWatching(activityc.Client, catalogc.Client))
 
-		r.Post("/v1/comments/{anime_id}", bffhandlers.CreateComment(socialc.Client))
-		r.Post("/v1/comments/{comment_id}/vote", bffhandlers.VoteComment(socialc.Client))
-		r.Put("/v1/comments/{comment_id}", bffhandlers.UpdateComment(socialc.Client))
-		r.Delete("/v1/comments/{comment_id}", bffhandlers.DeleteComment(socialc.Client))
+		r.Post("/v1/comments/{anime_id}", bffhandlers.CreateComment(socialc.Client, eventPublisher))
+		r.Post("/v1/comments/{comment_id}/vote", bffhandlers.VoteComment(socialc.Client, eventPublisher))
+		r.Put("/v1/comments/{comment_id}", bffhandlers.UpdateComment(socialc.Client, eventPublisher))
+		r.Delete("/v1/comments/{comment_id}", bffhandlers.DeleteComment(socialc.Client, eventPublisher))
 	})
 
 	// Public comment listing (no auth required)
 	r.Get("/v1/comments/{anime_id}", bffhandlers.ListComments(socialc.Client))
 
 	// Public catalog endpoints (no auth required)
-	r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client))
+	r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client, bffCache))
 	r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client))
 	r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
 	r.Get("/v1/episodes/{episode_id}", bffhandlers.GetEpisode(catalogc.Client))

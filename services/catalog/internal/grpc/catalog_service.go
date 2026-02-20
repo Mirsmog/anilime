@@ -37,7 +37,7 @@ func (s *CatalogService) insertOutboxEvent(ctx context.Context, tx pgx.Tx, event
 	return err
 }
 
-// episodeInput — общая структура для upsert-а эпизода из любого провайдера.
+// episodeInput is a common structure for upserting an episode from any provider.
 type episodeInput struct {
 	providerEpisodeID string
 	number            int32
@@ -47,8 +47,33 @@ type episodeInput struct {
 	hasIsFiller       bool // true если поле is_filler задано (hianime)
 }
 
-// upsertEpisodes выполняет upsert эпизодов внутри транзакции, устраняя дублирование
-// между UpsertAnimeKaiAnime и UpsertHiAnimeEpisodes.
+func writeEpisode(ctx context.Context, tx pgx.Tx, episodeID uuid.UUID, animeID uuid.UUID, ep episodeInput, now time.Time, insert bool) error {
+	var (
+		query string
+		args  []any
+	)
+
+	switch {
+	case insert && ep.hasIsFiller:
+		query = `INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at) VALUES ($1,$2,$3,$4,'',$5,$6)`
+		args = []any{episodeID, animeID, ep.number, ep.title, ep.isFiller, now}
+	case insert:
+		query = `INSERT INTO episodes (id, anime_id, number, title, url, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`
+		args = []any{episodeID, animeID, ep.number, ep.title, ep.url, now}
+	case ep.hasIsFiller:
+		query = `UPDATE episodes SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6 WHERE id=$1`
+		args = []any{episodeID, animeID, ep.number, ep.title, ep.isFiller, now}
+	default:
+		query = `UPDATE episodes SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6 WHERE id=$1`
+		args = []any{episodeID, animeID, ep.number, ep.title, ep.url, now}
+	}
+
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
+		return status.Error(codes.Internal, "db")
+	}
+	return nil
+}
+
 func upsertEpisodes(ctx context.Context, tx pgx.Tx, provider string, animeID uuid.UUID, episodes []episodeInput, now time.Time) ([]string, error) {
 	episodeIDs := make([]string, 0, len(episodes))
 	for _, ep := range episodes {
@@ -64,32 +89,16 @@ func upsertEpisodes(ctx context.Context, tx pgx.Tx, provider string, animeID uui
 				return nil, status.Error(codes.Internal, "db")
 			}
 			episodeID = uuid.New()
-			if ep.hasIsFiller {
-				qIns := `INSERT INTO episodes (id, anime_id, number, title, url, is_filler, updated_at) VALUES ($1,$2,$3,$4,'',$5,$6)`
-				if _, err := tx.Exec(ctx, qIns, episodeID, animeID, ep.number, ep.title, ep.isFiller, now); err != nil {
-					return nil, status.Error(codes.Internal, "db")
-				}
-			} else {
-				qIns := `INSERT INTO episodes (id, anime_id, number, title, url, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`
-				if _, err := tx.Exec(ctx, qIns, episodeID, animeID, ep.number, ep.title, ep.url, now); err != nil {
-					return nil, status.Error(codes.Internal, "db")
-				}
+			if err := writeEpisode(ctx, tx, episodeID, animeID, ep, now, true); err != nil {
+				return nil, err
 			}
 			qInsMap := `INSERT INTO external_episode_ids (provider, provider_episode_id, episode_id) VALUES ($1,$2,$3)`
 			if _, err := tx.Exec(ctx, qInsMap, provider, ep.providerEpisodeID, episodeID); err != nil {
 				return nil, status.Error(codes.Internal, "db")
 			}
 		} else {
-			if ep.hasIsFiller {
-				qUpd := `UPDATE episodes SET anime_id=$2, number=$3, title=$4, is_filler=$5, updated_at=$6 WHERE id=$1`
-				if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.number, ep.title, ep.isFiller, now); err != nil {
-					return nil, status.Error(codes.Internal, "db")
-				}
-			} else {
-				qUpd := `UPDATE episodes SET anime_id=$2, number=$3, title=$4, url=$5, updated_at=$6 WHERE id=$1`
-				if _, err := tx.Exec(ctx, qUpd, episodeID, animeID, ep.number, ep.title, ep.url, now); err != nil {
-					return nil, status.Error(codes.Internal, "db")
-				}
+			if err := writeEpisode(ctx, tx, episodeID, animeID, ep, now, false); err != nil {
+				return nil, err
 			}
 		}
 		episodeIDs = append(episodeIDs, episodeID.String())
@@ -325,7 +334,7 @@ DO UPDATE SET anime_id = EXCLUDED.anime_id;
 		return nil, status.Error(codes.Internal, "db")
 	}
 
-	// Собираем эпизоды в единый формат и делегируем в upsertEpisodes
+	// Normalise episodes into a common format and delegate to upsertEpisodes.
 	episodes := make([]episodeInput, 0, len(req.GetEpisodes()))
 	for _, ep := range req.GetEpisodes() {
 		if ep == nil {
@@ -525,7 +534,7 @@ WHERE id=$1
 		}
 	}
 
-	// Собираем эпизоды в единый формат и делегируем в upsertEpisodes
+	// Normalise episodes into a common format and delegate to upsertEpisodes.
 	episodes := make([]episodeInput, 0, len(anime.GetEpisodes()))
 	for _, ep := range anime.GetEpisodes() {
 		if ep == nil {

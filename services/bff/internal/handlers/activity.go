@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 
 	activityv1 "github.com/example/anime-platform/gen/activity/v1"
@@ -51,7 +50,7 @@ type continueResponse struct {
 	NextCursor string         `json:"next_cursor,omitempty"`
 }
 
-func UpsertProgress(activity activityv1.ActivityServiceClient) http.HandlerFunc {
+func UpsertProgress(activity activityv1.ActivityServiceClient, publisher *EventPublisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 		uid, ok := auth.UserIDFromContext(r.Context())
@@ -70,19 +69,16 @@ func UpsertProgress(activity activityv1.ActivityServiceClient) http.HandlerFunc 
 		}
 
 		// If JetStream is configured and async writes enabled, publish event and return 202.
-		if JS != nil && AsyncWrites {
-			eventID := uuid.NewString()
-			payload := map[string]interface{}{
-				"event_id":     eventID,
+		if publisher != nil && publisher.Enabled() {
+			payload := map[string]any{
 				"user_id":      uid,
 				"anime_id":     "",
 				"episode_id":   strings.TrimSpace(req.EpisodeID),
 				"position":     req.PositionSeconds,
 				"client_ts_ms": req.ClientTsMs,
-				"created_at":   time.Now().UTC().Format(time.RFC3339),
 			}
-			b, _ := json.Marshal(payload)
-			if _, err := JS.Publish("activity.progress", b); err != nil {
+			eventID, err := publisher.PublishJSON("activity.progress", payload)
+			if err != nil {
 				api.WriteError(w, http.StatusServiceUnavailable, "EVENT_PUBLISH_FAILED", "failed to publish event", rid, nil)
 				return
 			}

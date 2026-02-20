@@ -26,7 +26,11 @@ func (r *Runner) WithSignals(start func(ctx context.Context) error) int {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- start(ctx)
+		err := start(ctx)
+		select {
+		case errCh <- err:
+		default:
+		}
 	}()
 
 	select {
@@ -46,10 +50,14 @@ func (r *Runner) WithSignals(start func(ctx context.Context) error) int {
 }
 
 func (r *Runner) Graceful(ctx context.Context, shutdown func(context.Context) error) {
-	c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	_ = shutdown(c)
-	_ = ctx
+	if err := shutdown(c); err != nil &&
+		!errors.Is(err, context.Canceled) &&
+		!errors.Is(err, context.DeadlineExceeded) &&
+		!errors.Is(err, http.ErrServerClosed) {
+		r.Logger.Warn("graceful shutdown failed", zap.Error(err))
+	}
 }
 
 func Exit(code int) {

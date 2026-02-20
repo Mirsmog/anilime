@@ -1,8 +1,6 @@
 package grpcclient
 
 import (
-	"time"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -15,8 +13,6 @@ type AuthClient struct {
 }
 
 func NewAuthClient(addr string) (*AuthClient, error) {
-	_ = time.Second // kept for future dial options
-
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
