@@ -155,65 +155,6 @@ WHERE id=$1`,
 	return animeID.String(), nil
 }
 
-func (s *PostgresCatalogStore) UpsertAnimeKaiAnime(ctx context.Context, a AnimeKaiAnimeInput) (string, []string, error) {
-	genresJSON, _ := json.Marshal(a.Genres)
-	now := time.Now().UTC()
-
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return "", nil, status.Error(codes.Internal, "db begin")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var animeID uuid.UUID
-	err = tx.QueryRow(ctx,
-		`SELECT anime_id FROM external_anime_ids WHERE provider='animekai' AND provider_anime_id=$1`, a.ProviderAnimeID,
-	).Scan(&animeID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return "", nil, status.Error(codes.Internal, "db")
-		}
-		animeID = uuid.New()
-		if _, err = tx.Exec(ctx, `
-INSERT INTO anime (id, title, url, image, description, genres, sub_or_dub, type, status, other_name, total_episodes, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-			animeID, a.Title, a.URL, a.Image, a.Description, genresJSON,
-			a.SubOrDub, a.Type, a.Status, a.OtherName, a.TotalEpisodes, now, now,
-		); err != nil {
-			return "", nil, status.Error(codes.Internal, "db")
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO external_anime_ids (provider, provider_anime_id, anime_id) VALUES ('animekai',$1,$2)`,
-			a.ProviderAnimeID, animeID,
-		); err != nil {
-			return "", nil, status.Error(codes.Internal, "db")
-		}
-	} else {
-		if _, err := tx.Exec(ctx, `
-UPDATE anime
-SET title=$2, url=$3, image=$4, description=$5, genres=$6, sub_or_dub=$7, type=$8, status=$9, other_name=$10, total_episodes=$11, updated_at=$12
-WHERE id=$1`,
-			animeID, a.Title, a.URL, a.Image, a.Description, genresJSON,
-			a.SubOrDub, a.Type, a.Status, a.OtherName, a.TotalEpisodes, now,
-		); err != nil {
-			return "", nil, status.Error(codes.Internal, "db")
-		}
-	}
-
-	episodeIDs, err := upsertEpisodes(ctx, tx, "animekai", animeID, a.Episodes, now)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if err := insertOutboxEvent(ctx, tx, map[string]any{"anime_id": animeID.String()}); err != nil {
-		return "", nil, status.Error(codes.Internal, "db outbox")
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return "", nil, status.Error(codes.Internal, "db commit")
-	}
-	return animeID.String(), episodeIDs, nil
-}
-
 // ── Episode reads ──────────────────────────────────────────────────────────
 
 func (s *PostgresCatalogStore) GetEpisodesByAnimeID(ctx context.Context, animeID string) ([]Episode, error) {

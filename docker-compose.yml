@@ -169,7 +169,6 @@ services:
       HTTP_ADDR: :8083
       LOG_LEVEL: debug
       CATALOG_GRPC_ADDR: catalog:9092
-      ANIMEKAI_BASE_URL: https://api.consumet.org/anime/animekai
       HIANIME_BASE_URL: https://void-roan-six.vercel.app/api/v2
       JIKAN_BASE_URL: https://api.jikan.moe/v4
       NATS_URL: nats://nats:4222

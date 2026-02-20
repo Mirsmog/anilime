@@ -167,49 +167,6 @@ func (s *CatalogService) UpsertJikanAnime(ctx context.Context, req *catalogv1.Up
 	return &catalogv1.UpsertJikanAnimeResponse{AnimeId: animeID}, nil
 }
 
-func (s *CatalogService) UpsertAnimeKaiAnime(ctx context.Context, req *catalogv1.UpsertAnimeKaiAnimeRequest) (*catalogv1.UpsertAnimeKaiAnimeResponse, error) {
-	anime := req.GetAnime()
-	if anime == nil {
-		return nil, status.Error(codes.InvalidArgument, "anime is required")
-	}
-	provAnimeID := strings.TrimSpace(anime.GetProviderAnimeId())
-	if provAnimeID == "" {
-		return nil, status.Error(codes.InvalidArgument, "provider_anime_id is required")
-	}
-
-	episodes := make([]store.EpisodeInput, 0, len(anime.GetEpisodes()))
-	for _, ep := range anime.GetEpisodes() {
-		if ep == nil {
-			continue
-		}
-		episodes = append(episodes, store.EpisodeInput{
-			ProviderEpisodeID: strings.TrimSpace(ep.GetProviderEpisodeId()),
-			Number:            ep.GetNumber(),
-			Title:             ep.GetTitle(),
-			URL:               ep.GetUrl(),
-		})
-	}
-
-	animeID, epIDs, err := s.Store.UpsertAnimeKaiAnime(ctx, store.AnimeKaiAnimeInput{
-		ProviderAnimeID: provAnimeID,
-		Title:           anime.GetTitle(),
-		URL:             anime.GetUrl(),
-		Image:           anime.GetImage(),
-		Description:     anime.GetDescription(),
-		Genres:          anime.GetGenres(),
-		SubOrDub:        anime.GetSubOrDub(),
-		Type:            anime.GetType(),
-		Status:          anime.GetStatus(),
-		OtherName:       anime.GetOtherName(),
-		TotalEpisodes:   anime.GetTotalEpisodes(),
-		Episodes:        episodes,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &catalogv1.UpsertAnimeKaiAnimeResponse{AnimeId: animeID, EpisodeIds: epIDs}, nil
-}
-
 // ── helpers ────────────────────────────────────────────────────────────────
 
 func episodesToProto(eps []store.Episode) []*catalogv1.Episode {

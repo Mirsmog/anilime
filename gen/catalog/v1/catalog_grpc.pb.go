@@ -8,7 +8,6 @@ package catalogv1
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -25,7 +24,6 @@ const (
 	CatalogService_GetAnimeByIDs_FullMethodName              = "/catalog.v1.CatalogService/GetAnimeByIDs"
 	CatalogService_GetAnimeIDs_FullMethodName                = "/catalog.v1.CatalogService/GetAnimeIDs"
 	CatalogService_GetEpisodesByAnimeID_FullMethodName       = "/catalog.v1.CatalogService/GetEpisodesByAnimeID"
-	CatalogService_UpsertAnimeKaiAnime_FullMethodName        = "/catalog.v1.CatalogService/UpsertAnimeKaiAnime"
 	CatalogService_AttachExternalAnimeID_FullMethodName      = "/catalog.v1.CatalogService/AttachExternalAnimeID"
 	CatalogService_ResolveAnimeIDByExternalID_FullMethodName = "/catalog.v1.CatalogService/ResolveAnimeIDByExternalID"
 	CatalogService_UpsertHiAnimeEpisodes_FullMethodName      = "/catalog.v1.CatalogService/UpsertHiAnimeEpisodes"
@@ -41,7 +39,6 @@ type CatalogServiceClient interface {
 	GetAnimeByIDs(ctx context.Context, in *GetAnimeByIDsRequest, opts ...grpc.CallOption) (*GetAnimeByIDsResponse, error)
 	GetAnimeIDs(ctx context.Context, in *GetAnimeIDsRequest, opts ...grpc.CallOption) (*GetAnimeIDsResponse, error)
 	GetEpisodesByAnimeID(ctx context.Context, in *GetEpisodesByAnimeIDRequest, opts ...grpc.CallOption) (*GetEpisodesByAnimeIDResponse, error)
-	UpsertAnimeKaiAnime(ctx context.Context, in *UpsertAnimeKaiAnimeRequest, opts ...grpc.CallOption) (*UpsertAnimeKaiAnimeResponse, error)
 	AttachExternalAnimeID(ctx context.Context, in *AttachExternalAnimeIDRequest, opts ...grpc.CallOption) (*AttachExternalAnimeIDResponse, error)
 	ResolveAnimeIDByExternalID(ctx context.Context, in *ResolveAnimeIDByExternalIDRequest, opts ...grpc.CallOption) (*ResolveAnimeIDByExternalIDResponse, error)
 	UpsertHiAnimeEpisodes(ctx context.Context, in *UpsertHiAnimeEpisodesRequest, opts ...grpc.CallOption) (*UpsertHiAnimeEpisodesResponse, error)
@@ -106,16 +103,6 @@ func (c *catalogServiceClient) GetEpisodesByAnimeID(ctx context.Context, in *Get
 	return out, nil
 }
 
-func (c *catalogServiceClient) UpsertAnimeKaiAnime(ctx context.Context, in *UpsertAnimeKaiAnimeRequest, opts ...grpc.CallOption) (*UpsertAnimeKaiAnimeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpsertAnimeKaiAnimeResponse)
-	err := c.cc.Invoke(ctx, CatalogService_UpsertAnimeKaiAnime_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *catalogServiceClient) AttachExternalAnimeID(ctx context.Context, in *AttachExternalAnimeIDRequest, opts ...grpc.CallOption) (*AttachExternalAnimeIDResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AttachExternalAnimeIDResponse)
@@ -165,7 +152,6 @@ type CatalogServiceServer interface {
 	GetAnimeByIDs(context.Context, *GetAnimeByIDsRequest) (*GetAnimeByIDsResponse, error)
 	GetAnimeIDs(context.Context, *GetAnimeIDsRequest) (*GetAnimeIDsResponse, error)
 	GetEpisodesByAnimeID(context.Context, *GetEpisodesByAnimeIDRequest) (*GetEpisodesByAnimeIDResponse, error)
-	UpsertAnimeKaiAnime(context.Context, *UpsertAnimeKaiAnimeRequest) (*UpsertAnimeKaiAnimeResponse, error)
 	AttachExternalAnimeID(context.Context, *AttachExternalAnimeIDRequest) (*AttachExternalAnimeIDResponse, error)
 	ResolveAnimeIDByExternalID(context.Context, *ResolveAnimeIDByExternalIDRequest) (*ResolveAnimeIDByExternalIDResponse, error)
 	UpsertHiAnimeEpisodes(context.Context, *UpsertHiAnimeEpisodesRequest) (*UpsertHiAnimeEpisodesResponse, error)
@@ -194,9 +180,6 @@ func (UnimplementedCatalogServiceServer) GetAnimeIDs(context.Context, *GetAnimeI
 }
 func (UnimplementedCatalogServiceServer) GetEpisodesByAnimeID(context.Context, *GetEpisodesByAnimeIDRequest) (*GetEpisodesByAnimeIDResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEpisodesByAnimeID not implemented")
-}
-func (UnimplementedCatalogServiceServer) UpsertAnimeKaiAnime(context.Context, *UpsertAnimeKaiAnimeRequest) (*UpsertAnimeKaiAnimeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpsertAnimeKaiAnime not implemented")
 }
 func (UnimplementedCatalogServiceServer) AttachExternalAnimeID(context.Context, *AttachExternalAnimeIDRequest) (*AttachExternalAnimeIDResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachExternalAnimeID not implemented")
@@ -321,24 +304,6 @@ func _CatalogService_GetEpisodesByAnimeID_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CatalogService_UpsertAnimeKaiAnime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertAnimeKaiAnimeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CatalogServiceServer).UpsertAnimeKaiAnime(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CatalogService_UpsertAnimeKaiAnime_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CatalogServiceServer).UpsertAnimeKaiAnime(ctx, req.(*UpsertAnimeKaiAnimeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _CatalogService_AttachExternalAnimeID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AttachExternalAnimeIDRequest)
 	if err := dec(in); err != nil {
@@ -437,10 +402,6 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEpisodesByAnimeID",
 			Handler:    _CatalogService_GetEpisodesByAnimeID_Handler,
-		},
-		{
-			MethodName: "UpsertAnimeKaiAnime",
-			Handler:    _CatalogService_UpsertAnimeKaiAnime_Handler,
 		},
 		{
 			MethodName: "AttachExternalAnimeID",

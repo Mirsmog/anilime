@@ -57,37 +57,6 @@ message GetProviderEpisodeIDResponse {
   string provider_episode_id = 1;
 }
 
-message AnimeKaiEpisode {
-  string provider_episode_id = 1;
-  int32 number = 2;
-  string title = 3;
-  string url = 4;
-}
-
-message AnimeKaiAnime {
-  string provider_anime_id = 1;
-  string title = 2;
-  string url = 3;
-  string image = 4;
-  string description = 5;
-  repeated string genres = 6;
-  string sub_or_dub = 7;
-  string type = 8;
-  string status = 9;
-  string other_name = 10;
-  int32 total_episodes = 11;
-
-  repeated AnimeKaiEpisode episodes = 12;
-}
-
-message UpsertAnimeKaiAnimeRequest {
-  AnimeKaiAnime anime = 1;
-}
-
-message UpsertAnimeKaiAnimeResponse {
-  string anime_id = 1;
-  repeated string episode_ids = 2;
-}
 
 message AttachExternalAnimeIDRequest {
   string anime_id = 1;
@@ -159,7 +128,6 @@ service CatalogService {
   rpc GetAnimeByIDs(GetAnimeByIDsRequest) returns (GetAnimeByIDsResponse);
   rpc GetAnimeIDs(GetAnimeIDsRequest) returns (GetAnimeIDsResponse);
   rpc GetEpisodesByAnimeID(GetEpisodesByAnimeIDRequest) returns (GetEpisodesByAnimeIDResponse);
-  rpc UpsertAnimeKaiAnime(UpsertAnimeKaiAnimeRequest) returns (UpsertAnimeKaiAnimeResponse);
   rpc AttachExternalAnimeID(AttachExternalAnimeIDRequest) returns (AttachExternalAnimeIDResponse);
   rpc ResolveAnimeIDByExternalID(ResolveAnimeIDByExternalIDRequest) returns (ResolveAnimeIDByExternalIDResponse);
   rpc UpsertHiAnimeEpisodes(UpsertHiAnimeEpisodesRequest) returns (UpsertHiAnimeEpisodesResponse);
