@@ -9,7 +9,9 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/internal/platform/api"
+	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 )
 
@@ -61,7 +63,7 @@ func toEpisodeResponse(e *catalogv1.Episode) episodeResponse {
 	}
 }
 
-func GetAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
+func GetAnime(catalog catalogv1.CatalogServiceClient, ap *analytics.Publisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 
@@ -83,7 +85,14 @@ func GetAnime(catalog catalogv1.CatalogServiceClient) http.HandlerFunc {
 			return
 		}
 
-		api.WriteJSON(w, http.StatusOK, toAnimeResponse(resp.GetAnime()[0]))
+		a := resp.GetAnime()[0]
+		uid, _ := auth.UserIDFromContext(r.Context())
+		ap.Publish(analytics.SubjectCatalogAnimeViewed, "anime_viewed", uid, map[string]any{
+			"anime_id": a.GetId(),
+			"title":    a.GetTitle(),
+		})
+
+		api.WriteJSON(w, http.StatusOK, toAnimeResponse(a))
 	}
 }
 

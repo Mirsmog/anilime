@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/config"
 	"github.com/example/anime-platform/internal/platform/httpserver"
@@ -58,6 +59,7 @@ func main() {
 	// init bff cache with NATS invalidation
 	bffCache := bffhandlers.NewTTLCache(bffCfg.CacheTTLSeconds, nc, bffCfg.CacheInvalidationSubj)
 	eventPublisher := bffhandlers.NewEventPublisher(js)
+	analyticsPublisher := analytics.New(js, log)
 	authc, err := grpcclient.NewAuthClient(bffCfg.AuthGRPCAddr)
 	if err != nil {
 		log.Error("init auth grpc client", zap.Error(err))
@@ -110,8 +112,8 @@ func main() {
 	authLimiter := bffhttp.NewRateLimiter(5, 10)
 	r.Group(func(r chi.Router) {
 		r.Use(authLimiter.Middleware)
-		r.Post("/v1/auth/register", bffhandlers.Register(authc.Client))
-		r.Post("/v1/auth/login", bffhandlers.Login(authc.Client))
+		r.Post("/v1/auth/register", bffhandlers.Register(authc.Client, analyticsPublisher))
+		r.Post("/v1/auth/login", bffhandlers.Login(authc.Client, analyticsPublisher))
 		r.Post("/v1/auth/refresh", bffhandlers.Refresh(authc.Client))
 		r.Post("/v1/auth/logout", bffhandlers.Logout(authc.Client))
 	})
@@ -120,7 +122,7 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireUser(verifier))
-		r.Get("/v1/watch/{episode_id}", bffhandlers.Watch(streamingc.Client, bffCfg.HLSProxyBaseURL, bffCfg.HLSProxySigningSecret))
+		r.Get("/v1/watch/{episode_id}", bffhandlers.Watch(streamingc.Client, bffCfg.HLSProxyBaseURL, bffCfg.HLSProxySigningSecret, analyticsPublisher))
 	})
 
 	r.Route("/v1/admin", func(r chi.Router) {
@@ -148,7 +150,7 @@ func main() {
 
 	// Public catalog endpoints (no auth required)
 	r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client, bffCache))
-	r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client))
+	r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client, analyticsPublisher))
 	r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
 	r.Get("/v1/episodes/{episode_id}", bffhandlers.GetEpisode(catalogc.Client))
 

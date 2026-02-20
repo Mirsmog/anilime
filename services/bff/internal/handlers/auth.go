@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	authv1 "github.com/example/anime-platform/gen/auth/v1"
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/internal/platform/httpserver"
 )
@@ -41,7 +42,7 @@ type authResponse struct {
 	ExpiresIn    int64        `json:"expires_in"`
 }
 
-func Register(c authv1.AuthServiceClient) http.HandlerFunc {
+func Register(c authv1.AuthServiceClient, ap *analytics.Publisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := withForwardedMD(r)
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -57,11 +58,16 @@ func Register(c authv1.AuthServiceClient) http.HandlerFunc {
 			return
 		}
 
-		api.WriteJSON(w, http.StatusCreated, toAuthResponse(resp.GetUser(), resp.GetAccessToken(), resp.GetRefreshToken(), resp.GetExpiresIn()))
+		u := resp.GetUser()
+		ap.Publish(analytics.SubjectAuthRegistered, "user_registered", u.GetId(), map[string]any{
+			"username": u.GetUsername(),
+		})
+
+		api.WriteJSON(w, http.StatusCreated, toAuthResponse(u, resp.GetAccessToken(), resp.GetRefreshToken(), resp.GetExpiresIn()))
 	}
 }
 
-func Login(c authv1.AuthServiceClient) http.HandlerFunc {
+func Login(c authv1.AuthServiceClient, ap *analytics.Publisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := withForwardedMD(r)
 		rid := httpserver.RequestIDFromContext(r.Context())
@@ -76,6 +82,8 @@ func Login(c authv1.AuthServiceClient) http.HandlerFunc {
 			writeGRPCError(w, rid, err)
 			return
 		}
+
+		ap.Publish(analytics.SubjectAuthLoggedIn, "user_logged_in", resp.GetUser().GetId(), nil)
 
 		api.WriteJSON(w, http.StatusOK, toAuthResponse(resp.GetUser(), resp.GetAccessToken(), resp.GetRefreshToken(), resp.GetExpiresIn()))
 	}

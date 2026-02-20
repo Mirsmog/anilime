@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	streamingv1 "github.com/example/anime-platform/gen/streaming/v1"
+	"github.com/example/anime-platform/internal/platform/analytics"
 	"github.com/example/anime-platform/internal/platform/api"
 	"github.com/example/anime-platform/internal/platform/auth"
 	"github.com/example/anime-platform/internal/platform/httpserver"
@@ -23,7 +24,7 @@ type watchResponse struct {
 	SignedPlaybackURL string                          `json:"signed_playback_url"`
 }
 
-func Watch(client streamingv1.StreamingResolverServiceClient, hlsBase, hlsSecret string) http.HandlerFunc {
+func Watch(client streamingv1.StreamingResolverServiceClient, hlsBase, hlsSecret string, ap *analytics.Publisher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 		uid, ok := auth.UserIDFromContext(r.Context())
@@ -69,6 +70,10 @@ func Watch(client streamingv1.StreamingResolverServiceClient, hlsBase, hlsSecret
 			return
 		}
 
+		ap.Publish(analytics.SubjectStreamingStarted, "playback_started", uid, map[string]any{
+			"episode_id": episodeID,
+			"category":   category,
+		})
 		api.WriteJSON(w, http.StatusOK, watchResponse{Sources: resp.GetSources(), Tracks: resp.GetTracks(), Intro: resp.GetIntro(), Outro: resp.GetOutro(), SignedPlaybackURL: url})
 	}
 }

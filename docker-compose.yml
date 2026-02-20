@@ -253,3 +253,22 @@ services:
         condition: service_started
       nats:
         condition: service_started
+
+  analytics:
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
+    environment:
+      SERVICE_NAME: analytics
+      LOG_LEVEL: info
+      NATS_URL: nats://nats:4222
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      POSTHOG_HOST: ${POSTHOG_HOST:-https://app.posthog.com}
+      POSTHOG_FLUSH_INTERVAL_SEC: "5"
+      POSTHOG_FLUSH_AT: "100"
+      WORKER_BATCH_SIZE: "200"
+      WORKER_BATCH_INTERVAL_MS: "2000"
+    depends_on:
+      nats:
+        condition: service_started
+    restart: unless-stopped
