@@ -17,7 +17,7 @@ type searchResponse struct {
 	Total int32                `json:"total"`
 }
 
-func Search(search searchv1.SearchServiceClient, cache Cache) http.HandlerFunc {
+func Search(search searchv1.SearchServiceClient, cache Cache, fallback JikanFallback) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rid := httpserver.RequestIDFromContext(r.Context())
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -42,6 +42,17 @@ func Search(search searchv1.SearchServiceClient, cache Cache) http.HandlerFunc {
 			writeGRPCError(w, rid, err)
 			return
 		}
+
+		// On-demand fallback: if no local results and query is non-empty, try Jikan.
+		if resp.GetTotal() == 0 && q != "" && fallback != nil && offset == 0 {
+			hits, ferr := fallback.Search(r.Context(), q, limit)
+			if ferr == nil && len(hits) > 0 {
+				// Return Jikan results; do not cache (anime_id is empty until ingestion completes).
+				api.WriteJSON(w, http.StatusOK, searchResponse{Hits: hits, Total: int32(len(hits))})
+				return
+			}
+		}
+
 		out := searchResponse{Hits: resp.GetHits(), Total: resp.GetTotal()}
 		cache.Set(key, out)
 		api.WriteJSON(w, http.StatusOK, out)

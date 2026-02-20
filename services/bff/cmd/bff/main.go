@@ -123,7 +123,7 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicLimiter.Middleware)
-		r.Get("/v1/search", bffhandlers.Search(searchc.Client, bffCache))
+		r.Get("/v1/search", bffhandlers.Search(searchc.Client, bffCache, bffhandlers.NewJikanFallback(bffCfg.JikanBaseURL, js)))
 		r.Get("/v1/anime", bffhandlers.ListAnime(catalogc.Client, bffCache))
 		r.Get("/v1/anime/{anime_id}", bffhandlers.GetAnime(catalogc.Client, analyticsPublisher))
 		r.Get("/v1/anime/{anime_id}/episodes", bffhandlers.GetEpisodesByAnime(catalogc.Client))
