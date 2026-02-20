@@ -79,10 +79,38 @@ message DeleteCommentRequest {
 
 message DeleteCommentResponse {}
 
+// RateAnime
+
+message RateAnimeRequest {
+  string anime_id = 1;
+  int32 score = 2; // 1–10
+  // user_id is extracted from metadata on the server side.
+}
+
+message RateAnimeResponse {
+  double average = 1;
+  int32 count = 2;
+}
+
+// GetRating
+
+message GetRatingRequest {
+  string anime_id = 1;
+  // user_id is extracted from metadata on the server side (optional).
+}
+
+message GetRatingResponse {
+  double average = 1;
+  int32 count = 2;
+  optional int32 user_score = 3;
+}
+
 service SocialService {
   rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
   rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
   rpc VoteComment(VoteCommentRequest) returns (VoteCommentResponse);
   rpc UpdateComment(UpdateCommentRequest) returns (UpdateCommentResponse);
   rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentResponse);
+  rpc RateAnime(RateAnimeRequest) returns (RateAnimeResponse);
+  rpc GetRating(GetRatingRequest) returns (GetRatingResponse);
 }

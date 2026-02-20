@@ -7,13 +7,12 @@
 package socialv1
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -663,6 +662,214 @@ func (*DeleteCommentResponse) Descriptor() ([]byte, []int) {
 	return file_social_v1_social_proto_rawDescGZIP(), []int{11}
 }
 
+type RateAnimeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AnimeId       string                 `protobuf:"bytes,1,opt,name=anime_id,json=animeId,proto3" json:"anime_id,omitempty"`
+	Score         int32                  `protobuf:"varint,2,opt,name=score,proto3" json:"score,omitempty"` // 1–10
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateAnimeRequest) Reset() {
+	*x = RateAnimeRequest{}
+	mi := &file_social_v1_social_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateAnimeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateAnimeRequest) ProtoMessage() {}
+
+func (x *RateAnimeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_social_v1_social_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateAnimeRequest.ProtoReflect.Descriptor instead.
+func (*RateAnimeRequest) Descriptor() ([]byte, []int) {
+	return file_social_v1_social_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RateAnimeRequest) GetAnimeId() string {
+	if x != nil {
+		return x.AnimeId
+	}
+	return ""
+}
+
+func (x *RateAnimeRequest) GetScore() int32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+type RateAnimeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Average       float64                `protobuf:"fixed64,1,opt,name=average,proto3" json:"average,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateAnimeResponse) Reset() {
+	*x = RateAnimeResponse{}
+	mi := &file_social_v1_social_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateAnimeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateAnimeResponse) ProtoMessage() {}
+
+func (x *RateAnimeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_social_v1_social_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateAnimeResponse.ProtoReflect.Descriptor instead.
+func (*RateAnimeResponse) Descriptor() ([]byte, []int) {
+	return file_social_v1_social_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RateAnimeResponse) GetAverage() float64 {
+	if x != nil {
+		return x.Average
+	}
+	return 0
+}
+
+func (x *RateAnimeResponse) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+type GetRatingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AnimeId       string                 `protobuf:"bytes,1,opt,name=anime_id,json=animeId,proto3" json:"anime_id,omitempty"` // user_id is extracted from metadata on the server side (optional).
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRatingRequest) Reset() {
+	*x = GetRatingRequest{}
+	mi := &file_social_v1_social_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRatingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRatingRequest) ProtoMessage() {}
+
+func (x *GetRatingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_social_v1_social_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRatingRequest.ProtoReflect.Descriptor instead.
+func (*GetRatingRequest) Descriptor() ([]byte, []int) {
+	return file_social_v1_social_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetRatingRequest) GetAnimeId() string {
+	if x != nil {
+		return x.AnimeId
+	}
+	return ""
+}
+
+type GetRatingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Average       float64                `protobuf:"fixed64,1,opt,name=average,proto3" json:"average,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	UserScore     *int32                 `protobuf:"varint,3,opt,name=user_score,json=userScore,proto3,oneof" json:"user_score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRatingResponse) Reset() {
+	*x = GetRatingResponse{}
+	mi := &file_social_v1_social_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRatingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRatingResponse) ProtoMessage() {}
+
+func (x *GetRatingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_social_v1_social_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRatingResponse.ProtoReflect.Descriptor instead.
+func (*GetRatingResponse) Descriptor() ([]byte, []int) {
+	return file_social_v1_social_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetRatingResponse) GetAverage() float64 {
+	if x != nil {
+		return x.Average
+	}
+	return 0
+}
+
+func (x *GetRatingResponse) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *GetRatingResponse) GetUserScore() int32 {
+	if x != nil && x.UserScore != nil {
+		return *x.UserScore
+	}
+	return 0
+}
+
 var File_social_v1_social_proto protoreflect.FileDescriptor
 
 const file_social_v1_social_proto_rawDesc = "" +
@@ -718,13 +925,29 @@ const file_social_v1_social_proto_rawDesc = "" +
 	"\x14DeleteCommentRequest\x12\x1d\n" +
 	"\n" +
 	"comment_id\x18\x01 \x01(\tR\tcommentId\"\x17\n" +
-	"\x15DeleteCommentResponse2\xaa\x03\n" +
+	"\x15DeleteCommentResponse\"C\n" +
+	"\x10RateAnimeRequest\x12\x19\n" +
+	"\banime_id\x18\x01 \x01(\tR\aanimeId\x12\x14\n" +
+	"\x05score\x18\x02 \x01(\x05R\x05score\"C\n" +
+	"\x11RateAnimeResponse\x12\x18\n" +
+	"\aaverage\x18\x01 \x01(\x01R\aaverage\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"-\n" +
+	"\x10GetRatingRequest\x12\x19\n" +
+	"\banime_id\x18\x01 \x01(\tR\aanimeId\"v\n" +
+	"\x11GetRatingResponse\x12\x18\n" +
+	"\aaverage\x18\x01 \x01(\x01R\aaverage\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\x12\"\n" +
+	"\n" +
+	"user_score\x18\x03 \x01(\x05H\x00R\tuserScore\x88\x01\x01B\r\n" +
+	"\v_user_score2\xba\x04\n" +
 	"\rSocialService\x12R\n" +
 	"\rCreateComment\x12\x1f.social.v1.CreateCommentRequest\x1a .social.v1.CreateCommentResponse\x12O\n" +
 	"\fListComments\x12\x1e.social.v1.ListCommentsRequest\x1a\x1f.social.v1.ListCommentsResponse\x12L\n" +
 	"\vVoteComment\x12\x1d.social.v1.VoteCommentRequest\x1a\x1e.social.v1.VoteCommentResponse\x12R\n" +
 	"\rUpdateComment\x12\x1f.social.v1.UpdateCommentRequest\x1a .social.v1.UpdateCommentResponse\x12R\n" +
-	"\rDeleteComment\x12\x1f.social.v1.DeleteCommentRequest\x1a .social.v1.DeleteCommentResponseB\x9b\x01\n" +
+	"\rDeleteComment\x12\x1f.social.v1.DeleteCommentRequest\x1a .social.v1.DeleteCommentResponse\x12F\n" +
+	"\tRateAnime\x12\x1b.social.v1.RateAnimeRequest\x1a\x1c.social.v1.RateAnimeResponse\x12F\n" +
+	"\tGetRating\x12\x1b.social.v1.GetRatingRequest\x1a\x1c.social.v1.GetRatingResponseB\x9b\x01\n" +
 	"\rcom.social.v1B\vSocialProtoP\x01Z8github.com/example/anime-platform/gen/social/v1;socialv1\xa2\x02\x03SXX\xaa\x02\tSocial.V1\xca\x02\tSocial\\V1\xe2\x02\x15Social\\V1\\GPBMetadata\xea\x02\n" +
 	"Social::V1b\x06proto3"
 
@@ -740,7 +963,7 @@ func file_social_v1_social_proto_rawDescGZIP() []byte {
 	return file_social_v1_social_proto_rawDescData
 }
 
-var file_social_v1_social_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_social_v1_social_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_social_v1_social_proto_goTypes = []any{
 	(*Comment)(nil),               // 0: social.v1.Comment
 	(*CommentTreeNode)(nil),       // 1: social.v1.CommentTreeNode
@@ -754,12 +977,16 @@ var file_social_v1_social_proto_goTypes = []any{
 	(*UpdateCommentResponse)(nil), // 9: social.v1.UpdateCommentResponse
 	(*DeleteCommentRequest)(nil),  // 10: social.v1.DeleteCommentRequest
 	(*DeleteCommentResponse)(nil), // 11: social.v1.DeleteCommentResponse
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(*RateAnimeRequest)(nil),      // 12: social.v1.RateAnimeRequest
+	(*RateAnimeResponse)(nil),     // 13: social.v1.RateAnimeResponse
+	(*GetRatingRequest)(nil),      // 14: social.v1.GetRatingRequest
+	(*GetRatingResponse)(nil),     // 15: social.v1.GetRatingResponse
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 }
 var file_social_v1_social_proto_depIdxs = []int32{
-	12, // 0: social.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	12, // 1: social.v1.Comment.updated_at:type_name -> google.protobuf.Timestamp
-	12, // 2: social.v1.Comment.deleted_at:type_name -> google.protobuf.Timestamp
+	16, // 0: social.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
+	16, // 1: social.v1.Comment.updated_at:type_name -> google.protobuf.Timestamp
+	16, // 2: social.v1.Comment.deleted_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: social.v1.CommentTreeNode.comment:type_name -> social.v1.Comment
 	0,  // 4: social.v1.CommentTreeNode.replies:type_name -> social.v1.Comment
 	0,  // 5: social.v1.CreateCommentResponse.comment:type_name -> social.v1.Comment
@@ -769,13 +996,17 @@ var file_social_v1_social_proto_depIdxs = []int32{
 	6,  // 9: social.v1.SocialService.VoteComment:input_type -> social.v1.VoteCommentRequest
 	8,  // 10: social.v1.SocialService.UpdateComment:input_type -> social.v1.UpdateCommentRequest
 	10, // 11: social.v1.SocialService.DeleteComment:input_type -> social.v1.DeleteCommentRequest
-	3,  // 12: social.v1.SocialService.CreateComment:output_type -> social.v1.CreateCommentResponse
-	5,  // 13: social.v1.SocialService.ListComments:output_type -> social.v1.ListCommentsResponse
-	7,  // 14: social.v1.SocialService.VoteComment:output_type -> social.v1.VoteCommentResponse
-	9,  // 15: social.v1.SocialService.UpdateComment:output_type -> social.v1.UpdateCommentResponse
-	11, // 16: social.v1.SocialService.DeleteComment:output_type -> social.v1.DeleteCommentResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
+	12, // 12: social.v1.SocialService.RateAnime:input_type -> social.v1.RateAnimeRequest
+	14, // 13: social.v1.SocialService.GetRating:input_type -> social.v1.GetRatingRequest
+	3,  // 14: social.v1.SocialService.CreateComment:output_type -> social.v1.CreateCommentResponse
+	5,  // 15: social.v1.SocialService.ListComments:output_type -> social.v1.ListCommentsResponse
+	7,  // 16: social.v1.SocialService.VoteComment:output_type -> social.v1.VoteCommentResponse
+	9,  // 17: social.v1.SocialService.UpdateComment:output_type -> social.v1.UpdateCommentResponse
+	11, // 18: social.v1.SocialService.DeleteComment:output_type -> social.v1.DeleteCommentResponse
+	13, // 19: social.v1.SocialService.RateAnime:output_type -> social.v1.RateAnimeResponse
+	15, // 20: social.v1.SocialService.GetRating:output_type -> social.v1.GetRatingResponse
+	14, // [14:21] is the sub-list for method output_type
+	7,  // [7:14] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -788,13 +1019,14 @@ func file_social_v1_social_proto_init() {
 	}
 	file_social_v1_social_proto_msgTypes[0].OneofWrappers = []any{}
 	file_social_v1_social_proto_msgTypes[2].OneofWrappers = []any{}
+	file_social_v1_social_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_social_v1_social_proto_rawDesc), len(file_social_v1_social_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

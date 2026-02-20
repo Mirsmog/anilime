@@ -16,6 +16,66 @@ import (
 type SocialService struct {
 	socialv1.UnimplementedSocialServiceServer
 	Comments store.CommentStore
+	Ratings  store.RatingStore
+}
+
+func (s *SocialService) RateAnime(ctx context.Context, req *socialv1.RateAnimeRequest) (*socialv1.RateAnimeResponse, error) {
+	userID, err := userIDFromMD(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	animeID := strings.TrimSpace(req.GetAnimeId())
+	if animeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "anime_id is required")
+	}
+
+	score := int(req.GetScore())
+	if score < 1 || score > 10 {
+		return nil, status.Error(codes.InvalidArgument, "score must be between 1 and 10")
+	}
+
+	if err := s.Ratings.Upsert(ctx, animeID, userID, score); err != nil {
+		return nil, status.Error(codes.Internal, "failed to save rating")
+	}
+
+	summary, err := s.Ratings.GetSummary(ctx, animeID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get summary")
+	}
+
+	return &socialv1.RateAnimeResponse{
+		Average: summary.AverageScore,
+		Count:   int32(summary.TotalRatings),
+	}, nil
+}
+
+func (s *SocialService) GetRating(ctx context.Context, req *socialv1.GetRatingRequest) (*socialv1.GetRatingResponse, error) {
+	animeID := strings.TrimSpace(req.GetAnimeId())
+	if animeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "anime_id is required")
+	}
+
+	summary, err := s.Ratings.GetSummary(ctx, animeID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get rating summary")
+	}
+
+	resp := &socialv1.GetRatingResponse{
+		Average: summary.AverageScore,
+		Count:   int32(summary.TotalRatings),
+	}
+
+	// Optionally attach the caller's own score if authenticated.
+	userID, err := userIDFromMD(ctx)
+	if err == nil && userID != "" {
+		if userScore, ok, _ := s.Ratings.GetUserRating(ctx, animeID, userID); ok {
+			s32 := int32(userScore)
+			resp.UserScore = &s32
+		}
+	}
+
+	return resp, nil
 }
 
 func userIDFromMD(ctx context.Context) (string, error) {
