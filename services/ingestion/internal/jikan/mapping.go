@@ -10,7 +10,11 @@ func ToCatalogProto(resp *AnimeResponse) *catalogv1.JikanAnime {
 	if resp == nil {
 		return nil
 	}
-	data := resp.Data
+	return AnimeDataToProto(resp.Data)
+}
+
+// AnimeDataToProto converts a single AnimeData (from list or single endpoints) to proto.
+func AnimeDataToProto(data AnimeData) *catalogv1.JikanAnime {
 	genres := make([]string, 0, len(data.Genres))
 	for _, g := range data.Genres {
 		name := strings.TrimSpace(g.Name)

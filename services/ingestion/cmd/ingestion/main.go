@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
-	"encoding/json"
+	"github.com/nats-io/nats.go"
 
 	catalogv1 "github.com/example/anime-platform/gen/catalog/v1"
 	"github.com/example/anime-platform/internal/platform/config"
@@ -121,6 +123,43 @@ func main() {
 		}
 	}()
 
+	// Bulk import on startup: if catalog is empty, enqueue top-500 anime.
+	go func() {
+		time.Sleep(5 * time.Second) // wait for catalog service to be ready
+		ids, err := catc.Client.GetAnimeIDs(context.Background(), &catalogv1.GetAnimeIDsRequest{})
+		if err != nil {
+			log.Warn("bulk import: could not check catalog size", zap.Error(err))
+			return
+		}
+		if len(ids.GetAnimeIds()) > 0 {
+			log.Info("bulk import: catalog not empty, skipping", zap.Int("count", len(ids.GetAnimeIds())))
+			return
+		}
+		log.Info("bulk import: catalog is empty, enqueueing top-500 anime")
+		published := publishJikanPages(context.Background(), log, jc, js, "top", 20)
+		log.Info("bulk import: done", zap.Int("published", published))
+	}()
+
+	// Cron: sync current season every 24h, refresh top-100 every 7 days.
+	go func() {
+		seasonTicker := time.NewTicker(24 * time.Hour)
+		topTicker := time.NewTicker(7 * 24 * time.Hour)
+		defer seasonTicker.Stop()
+		defer topTicker.Stop()
+		for {
+			select {
+			case <-seasonTicker.C:
+				log.Info("cron: syncing current season")
+				n := publishJikanPages(context.Background(), log, jc, js, "season", 2)
+				log.Info("cron: season sync done", zap.Int("published", n))
+			case <-topTicker.C:
+				log.Info("cron: refreshing top-100")
+				n := publishJikanPages(context.Background(), log, jc, js, "top", 4)
+				log.Info("cron: top refresh done", zap.Int("published", n))
+			}
+		}
+	}()
+
 	r.Get("/v1/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("pong"))
@@ -139,4 +178,49 @@ func main() {
 
 	log.Info("exit", zap.Int("code", code))
 	run.Exit(code)
+}
+
+// publishJikanPages fetches pages from Jikan (top or season) and publishes mal_ids to NATS.
+// kind: "top" → /top/anime, "season" → /seasons/now.
+func publishJikanPages(ctx context.Context, log *zap.Logger, jc *jikan.Client, js natsJS, kind string, pages int) int {
+	dedup := make(map[int32]struct{}, pages*25)
+	for p := 1; p <= pages; p++ {
+		var list *jikan.AnimeListResponse
+		var err error
+		if kind == "season" {
+			list, err = jc.GetSeasonNow(ctx, p)
+		} else {
+			list, err = jc.GetTopAnime(ctx, p)
+		}
+		if err != nil {
+			log.Warn("publishJikanPages: fetch error", zap.String("kind", kind), zap.Int("page", p), zap.Error(err))
+			break
+		}
+		for _, a := range list.Data {
+			if a.MalID > 0 {
+				dedup[a.MalID] = struct{}{}
+			}
+		}
+		if !list.Pagination.HasNextPage {
+			break
+		}
+		// brief pause to respect Jikan rate limit (3 req/s free tier)
+		time.Sleep(400 * time.Millisecond)
+	}
+
+	published := 0
+	for malID := range dedup {
+		b, _ := json.Marshal(queue.JikanSyncJob{MALID: int(malID)})
+		if _, err := js.Publish("ingestion.jikan.sync", b); err != nil {
+			log.Warn("publishJikanPages: nats publish error", zap.Int32("mal_id", malID), zap.Error(err))
+			continue
+		}
+		published++
+	}
+	return published
+}
+
+// natsJS is the subset of nats.JetStreamContext used by publishJikanPages.
+type natsJS interface {
+	Publish(subj string, data []byte, opts ...nats.PubOpt) (*nats.PubAck, error)
 }
